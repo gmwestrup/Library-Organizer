@@ -1,5 +1,17 @@
 # Library Organizer
 
+[![CI](https://github.com/gmwestrup/Library-Organizer/actions/workflows/ci.yml/badge.svg)](https://github.com/gmwestrup/Library-Organizer/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/gmwestrup/Library-Organizer?color=C2913A&label=release)](https://github.com/gmwestrup/Library-Organizer/releases)
+[![License: MIT](https://img.shields.io/badge/license-MIT-1B2733)](LICENSE)
+[![Python 3.9+](https://img.shields.io/badge/python-3.9%2B-3776AB?logo=python&logoColor=white)](requirements.txt)
+
+[![Docker](https://img.shields.io/badge/Docker-NAS%20ready-2496ED?logo=docker&logoColor=white)](docs/INSTALL.md)
+[![Windows](https://img.shields.io/badge/Windows-desktop%20edition-0078D4?logo=windows&logoColor=white)](windows/README.md)
+[![Audiobookshelf](https://img.shields.io/badge/Audiobookshelf-ready-C2913A)](https://www.audiobookshelf.org/)
+[![Calibre](https://img.shields.io/badge/Calibre-ready-8DA3B5)](https://calibre-ebook.com/)
+[![AI optional](https://img.shields.io/badge/AI-Claude%20%7C%20Ollama%20(optional)-D97757)](#optional-extras)
+[![Originals untouched](https://img.shields.io/badge/originals-never%20modified-2E7D32)](#how-it-works)
+
 Point it at a messy folder of audiobooks and ebooks. It works out what every
 book really is, finds the duplicates, fixes the author names, finds the best
 covers, and **copies** everything into a clean library:
@@ -124,10 +136,10 @@ python tests/test_pipeline.py         # the whole pipeline end to end (online + 
 ## Credits
 
 Library Organizer v2 folds in the author's earlier tools
-([calibre-library-cleaner](https://github.com/gmwestrup/calibre-library-cleaner),
-[calibre-author-cleanup](https://github.com/gmwestrup/calibre-author-cleanup),
-[abs-duplicate-finder](https://github.com/gmwestrup/abs-duplicate-finder)) and
-borrows ideas, word lists and real-world test cases from
+[calibre-author-cleanup](https://github.com/gmwestrup/calibre-author-cleanup) and
+[abs-duplicate-finder](https://github.com/gmwestrup/abs-duplicate-finder), adopts a
+few ideas from [calibre-library-cleaner](https://github.com/gmwestrup/calibre-library-cleaner)
+(which remains its own separate tool), and borrows ideas, word lists and real-world test cases from
 [deucebucket/library-manager](https://github.com/deucebucket/library-manager)
 (MIT). Metadata from Audible, [Audnexus](https://audnex.us), Google Books and
 Open Library. See [`NOTICE.md`](NOTICE.md).
