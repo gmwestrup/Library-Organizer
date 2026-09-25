@@ -1,0 +1,638 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Library Organizer</title>
+<style>
+:root{--ink:#1B2733;--ink2:#22313F;--paper:#F4F1EA;--brass:#C2913A;--steel:#8DA3B5;
+  --good:#D9F2D9;--warn:#FFE9C9;--bad:#F6D0D0;--info:#CCE4F7;--dupc:#EAD9F2;--line:#DDD6C6;
+  --mono:ui-monospace,Consolas,Menlo,monospace}
+*{box-sizing:border-box}
+body{margin:0;font:15px/1.5 -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+  background:var(--paper);color:#2B3540}
+header{background:var(--ink);color:#E9EDF1;padding:14px 22px;display:flex;align-items:baseline;gap:14px;flex-wrap:wrap}
+header h1{font-size:1.05rem;margin:0;font-weight:600}
+header .sub{font-family:var(--mono);font-size:.74rem;color:var(--brass);letter-spacing:.06em}
+.bar{background:#fff;border-bottom:1px solid var(--line);padding:10px 22px;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.bar label{font-size:.82rem;color:#4B5764}
+details.opts{background:#FBFAF6;border-bottom:1px solid var(--line);padding:6px 22px}
+details.opts summary{cursor:pointer;font-size:.82rem;color:#4B5764;padding:4px 0}
+details.opts .grid{display:flex;flex-wrap:wrap;gap:6px 16px;padding:6px 0 10px}
+details.opts .grid label{font-size:.8rem;color:#4B5764}
+input[type=text],input[type=password],input[type=number],select,textarea{padding:7px 9px;border:1px solid #C9C2B2;border-radius:5px;font-size:.82rem;background:#fff}
+input[type=text]{font-family:var(--mono);min-width:230px}
+button{padding:8px 14px;border:1px solid #C9C2B2;background:#F1EDE2;border-radius:5px;font-size:.85rem;cursor:pointer;color:#22313F}
+button:hover{background:#E7E1D1}
+button.primary{background:var(--brass);border-color:var(--brass);color:#1B2733;font-weight:600}
+button.primary:hover{background:#D6A54A}
+button.ink{background:var(--ink);border-color:var(--ink);color:#F4F1EA;font-weight:600}
+button.ink:hover{background:#2C3E50}
+button:disabled{opacity:.45;cursor:default}
+button.small{padding:4px 9px;font-size:.78rem}
+.pipe{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.pipe .arrow{color:#B9AE94}
+.step{font-variant-numeric:tabular-nums}
+.counts{margin-left:auto;font-size:.8rem;color:#4B5764;display:flex;gap:12px;flex-wrap:wrap}
+.counts span{cursor:pointer}
+.dot{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:4px}
+.tabs{display:flex;gap:2px;padding:10px 22px 0;border-bottom:1px solid var(--line)}
+.tab{padding:8px 16px;border:1px solid transparent;border-bottom:none;border-radius:6px 6px 0 0;cursor:pointer;font-size:.86rem;color:#4B5764}
+.tab.on{background:#fff;border-color:var(--line);color:var(--ink);font-weight:600;margin-bottom:-1px}
+.tab b{font-weight:600;color:var(--brass)}
+main{padding:14px 22px;display:grid;grid-template-columns:1fr;gap:12px}
+.pane{display:none}.pane.on{display:grid;gap:12px}
+.tablewrap{background:#fff;border:1px solid var(--line);border-radius:8px;overflow:auto;max-height:58vh}
+table{border-collapse:collapse;width:100%;font-size:.82rem}
+th{position:sticky;top:0;background:#ECE8DE;text-align:left;padding:8px 8px;border-bottom:1px solid #D5CDBB;font-size:.75rem;white-space:nowrap;z-index:1}
+td{padding:5px 8px;border-bottom:1px solid #EFEBE1;vertical-align:top}
+tr.review td{background:var(--warn)}tr.copied td{background:var(--good)}tr.error td{background:var(--bad)}
+tr.online td{background:var(--info)}tr.skipped td{background:#E9E9E9;color:#8A93A0}tr.dup td{background:var(--dupc)}
+td[contenteditable]{cursor:text;min-width:60px}
+td[contenteditable]:focus{outline:2px solid var(--brass);background:#FFFDF4}
+td.dest{font-family:var(--mono);font-size:.7rem;color:#6B7684;max-width:260px;overflow-wrap:anywhere}
+td.thumb{padding:3px 6px;width:40px}
+td.thumb img{width:32px;height:32px;object-fit:cover;border-radius:3px;display:block;background:#E3DECF}
+td.thumb .none{width:32px;height:32px;border:1px dashed #C9C2B2;border-radius:3px}
+.conf{font-family:var(--mono);font-size:.74rem;padding:1px 6px;border-radius:9px;white-space:nowrap}
+.c-hi{background:#CDEBCB;color:#24572A}.c-mid{background:#F3E3BF;color:#6D5316}.c-lo{background:#F2C9C4;color:#7B2A20}
+.flag{font-size:.7rem;padding:0 5px;border-radius:3px;margin-left:4px;white-space:nowrap}
+.f-ai{background:#DCE3F6;color:#2D3F7A}.f-bad{background:#F2C9C4;color:#7B2A20}.f-lock{background:#E4E0D4;color:#5D5543}
+.rowbtn{border:none;background:none;cursor:pointer;font-size:.9rem;padding:2px 3px;color:#6B7684}
+.rowbtn.del{color:#A33}
+.pager{display:flex;gap:8px;align-items:center;font-size:.82rem}
+.logwrap{background:var(--ink2);color:#C3CDD6;border-radius:8px;padding:10px 14px;font-family:var(--mono);font-size:.75rem;max-height:170px;overflow:auto;white-space:pre-wrap}
+.progress{height:8px;background:#E3DECF;border-radius:4px;overflow:hidden}
+.progress i{display:block;height:100%;background:var(--brass);width:0;transition:width .3s}
+.note{font-size:.8rem;color:#6D5A2A;background:#F6EFD9;border:1px solid #E4D6A8;border-radius:6px;padding:9px 13px}
+.card{background:#fff;border:1px solid var(--line);border-radius:8px;padding:12px 14px}
+.card h3{margin:0 0 6px;font-size:.92rem}
+.muted{color:#7A8590;font-size:.8rem}
+.reason{display:inline-block;font-size:.72rem;background:#EFE7F5;color:#553F6B;border-radius:4px;padding:1px 7px;margin-right:4px}
+.dgrid td{font-size:.8rem}
+.keeper td{background:#EEF6EC}
+.sgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:12px}
+.field{display:flex;flex-direction:column;gap:3px;margin-bottom:9px}
+.field label{font-size:.78rem;color:#4B5764}
+/* drawer */
+#drawer{position:fixed;top:0;right:0;bottom:0;width:min(560px,96vw);background:#fff;box-shadow:-8px 0 30px rgba(27,39,51,.25);z-index:40;transform:translateX(105%);transition:transform .2s;overflow:auto;padding:18px 20px}
+#drawer.on{transform:none}
+#drawer h2{font-size:1rem;margin:0 0 2px}
+.covers{display:flex;flex-wrap:wrap;gap:10px;margin:6px 0}
+.covers figure{margin:0;width:112px;cursor:pointer;border:2px solid transparent;border-radius:6px;padding:3px}
+.covers figure.on{border-color:var(--brass)}
+.covers img{width:100%;aspect-ratio:1;object-fit:contain;background:#F1EDE2;border-radius:4px}
+.covers figcaption{font-size:.68rem;color:#6B7684;line-height:1.3}
+.kv{display:grid;grid-template-columns:110px 1fr;gap:4px 10px;font-size:.8rem}
+.kv div:nth-child(odd){color:#7A8590}
+.efield{width:100%;font-family:inherit!important;min-width:0!important}
+.aibox{background:#EEF1FA;border:1px solid #CFD8EF;border-radius:6px;padding:9px 12px;font-size:.82rem}
+@media(max-width:800px){input[type=text]{min-width:150px}}
+</style>
+</head>
+<body>
+<header>
+  <h1>Library Organizer</h1>
+  <span class="sub">scan &middot; enrich &middot; identify &middot; clean up &middot; copy &mdash; v{{ version }}</span>
+</header>
+
+<div class="bar">
+  <label>Source <input type="text" id="source" value="{{ source }}"></label>
+  <button id="browseSrc" title="Pick a folder to scan - you can scan just one subfolder">Browse...</button>
+  <label>Destination <input type="text" id="dest" value="{{ dest }}"></label>
+  <button id="browseDst">Browse...</button>
+  <label>Structure
+    <select id="layout">
+      <option value="nested_series">Author \ Series \ Title</option>
+      <option value="nested_noseries">Author \ Title</option>
+      <option value="flat_ast">Author - Series - Title</option>
+      <option value="flat_at">Author - Title</option>
+      <option value="flat_t">Title only</option>
+    </select>
+  </label>
+</div>
+
+<details class="opts">
+  <summary>Scan, enrich &amp; copy options</summary>
+  <div class="grid">
+    <label><input type="checkbox" id="audio" checked> Audiobooks</label>
+    <label><input type="checkbox" id="ebooks" checked> Ebooks</label>
+    <label title="Narrator, (Unabridged), format and year tags are always removed. Tick to also remove EVERY other (...) or [...]"><input type="checkbox" id="stripParens"> Strip all (...) from titles</label>
+    <label title="When a structured Author\Series\Book path and the embedded tags disagree, believe the folders. Sidecars always win."><input type="checkbox" id="trustFolders" checked> Trust folder names over tags</label>
+    <span class="muted">Use only as last resort:
+      <label><input type="checkbox" id="distrustOpf"> .opf</label>
+      <label><input type="checkbox" id="distrustJson"> metadata.json</label>
+      <label><input type="checkbox" id="distrustTags"> embedded tags</label></span>
+  </div>
+  <div class="grid">
+    <label title="Match books against Audible / Google Books / Open Library"><input type="checkbox" id="online" checked> Online match</label>
+    <label title="Find, measure and rank every cover: embedded, folder images, Audible, Google, Open Library"><input type="checkbox" id="covers" checked> Find best covers</label>
+    <label title="Let a confident online match tidy the title/author spelling. Sidecar (opf/json) data and your own edits are never overwritten."><input type="checkbox" id="fixNames" checked> Correct names from confident matches</label>
+    <label title="Autopilot: ask the AI about books still below the confidence threshold (only if AI is configured)"><input type="checkbox" id="useAi" checked> Autopilot uses AI</label>
+    <label title="Autopilot: resolve every duplicate group with the recommended keeper"><input type="checkbox" id="autoDupes" checked> Autopilot resolves duplicates</label>
+  </div>
+  <div class="grid">
+    <label><input type="checkbox" id="writeOpf" checked> Write metadata.opf</label>
+    <label><input type="checkbox" id="writeJson" checked> Write metadata.json</label>
+    <label title="Write the reviewed metadata into the COPIED audio files and epubs (originals never touched)"><input type="checkbox" id="embedTags" checked> Fix embedded tags in copies</label>
+    <label><input type="checkbox" id="writeCover" checked> Write cover.jpg</label>
+    <label title="Embed the chosen cover into the copied audio files (downscaled for multi-part books)"><input type="checkbox" id="embedCover" checked> Embed cover in audio</label>
+    <label title="Rename multi-file audiobooks to 'Title - 01', 'Title - 02'..."><input type="checkbox" id="renameParts"> Rename multi-part files</label>
+    <label title="Off: folders carry just the title; the position lives in the metadata. On: '01 - Title'."><input type="checkbox" id="numberFolders"> Number folders by series position</label>
+    <label title="Books with an empty or unreadable file stay in the plan instead of being copied"><input type="checkbox" id="holdDamaged" checked> Hold back damaged books</label>
+    <label title="Books still missing an author or title stay in the plan instead of landing in 'Unknown Author'"><input type="checkbox" id="holdReview" checked> Hold back books missing author/title</label>
+    <label title="Hold back books below this confidence when copying (0 = copy everything)">Copy only if confidence &ge; <input type="number" id="minConf" value="0" min="0" max="100" style="width:64px"></label>
+  </div>
+</details>
+
+<div class="bar">
+  <div class="pipe">
+    <button class="ink" id="btnAuto" title="Scan, enrich, merge safe author variants, ask the AI about the uncertain ones, resolve duplicates. Never copies - you review first.">Autopilot</button>
+    <span class="arrow">or step by step:</span>
+    <button class="primary step" id="btnScan">1 Scan</button><span class="arrow">&rsaquo;</span>
+    <button class="primary step" id="btnEnrich" title="Audio probe, deep metadata, ebook text / ISBN, online match (duration-aware), covers">2 Enrich</button><span class="arrow">&rsaquo;</span>
+    <button class="primary step" id="btnAi" title="Ask the AI about books below the confidence threshold">3 AI identify</button><span class="arrow">&rsaquo;</span>
+    <button class="primary step" id="btnTabDupes" title="Duplicates and author variants">4 Clean up</button><span class="arrow">&rsaquo;</span>
+    <button class="primary step" id="btnCopy">5 Copy</button>
+    <button id="btnStop" style="display:none;background:#D08B7E;border-color:#C07668;color:#fff">&#9632; Stop</button>
+  </div>
+  <span class="counts" id="counts"></span>
+</div>
+
+<div class="tabs">
+  <div class="tab on" data-tab="books">Books</div>
+  <div class="tab" data-tab="dupes">Duplicates <b id="tDupes"></b></div>
+  <div class="tab" data-tab="authors">Authors</div>
+  <div class="tab" data-tab="settings">AI &amp; Settings</div>
+</div>
+
+{% if not have_mutagen %}
+<main><div class="note">mutagen is not installed, so audio tags can't be read or written. Install it (pip install mutagen) or rebuild the image.</div></main>
+{% endif %}
+
+<main>
+  <div class="progress"><i id="progressBar"></i></div>
+  <div id="eta" class="muted"></div>
+
+  <!-- ============ BOOKS ============ -->
+  <section class="pane on" id="pane-books">
+    <div class="bar" style="border:1px solid var(--line);border-radius:8px">
+      <input type="text" id="q" placeholder="Filter by author / series / title / narrator...">
+      <label>Show
+        <select id="statusFilter">
+          <option value="">everything</option>
+          <option value="low">low confidence</option>
+          <option value="review">needs review (missing author/title)</option>
+          <option value="ai">AI suggestions to review</option>
+          <option value="dups">possible duplicates</option>
+          <option value="damaged">damaged / unreadable</option>
+          <option value="nocover">no cover</option>
+          <option value="pending">not yet copied</option>
+          <option value="copied">copied</option>
+          <option value="skipped">skipped</option>
+        </select>
+      </label>
+      <label>Sort <select id="sort"><option value="author">author / series</option><option value="conf">confidence (lowest first)</option></select></label>
+      <button id="btnExport">Export CSV</button>
+      <button id="btnJournal" title="Every copy / skip / merge, source -> destination">Journal CSV</button>
+    </div>
+    <div class="bar" id="bulkbar" style="display:none;border:1px solid #E4D6A8;background:#F6EFD9;border-radius:6px">
+      <b id="bulkCount" style="font-size:.82rem"></b>
+      <input type="text" id="bulkAuthor" placeholder="Set author (blank = keep)">
+      <input type="text" id="bulkSeries" placeholder="Set series (blank = keep)">
+      <input type="text" id="bulkIdx" placeholder="#" style="min-width:60px;width:60px">
+      <input type="text" id="bulkNarr" placeholder="Set narrator" style="min-width:150px">
+      <button class="primary" id="btnBulk">Apply to checked</button>
+      <button id="btnEnrichChecked">Enrich checked</button>
+      <button id="btnAiChecked">AI checked</button>
+      <button id="btnSkipChecked">Skip</button>
+      <button id="btnUnskipChecked">Un-skip</button>
+      <button id="btnUncheck">Uncheck all</button>
+    </div>
+    <div class="tablewrap">
+      <table>
+        <thead><tr>
+          <th><input type="checkbox" id="checkAll" title="Check all on this page"></th><th></th>
+          <th>Type</th><th>Author</th><th>Series</th><th>#</th><th>Title</th><th>Narrator</th>
+          <th>Length</th><th>Conf.</th><th>Will be filed under</th><th>Source</th><th>Meta</th><th>Status</th><th></th>
+        </tr></thead>
+        <tbody id="rows"><tr><td colspan="15" class="muted">
+          Pick a source folder and press <b>Autopilot</b> (or go step by step). Click any Author / Series / # / Title /
+          Narrator cell to edit it - your edits are remembered forever, even if the files move.</td></tr></tbody>
+      </table>
+    </div>
+    <div class="pager">
+      <button id="prev">&larr; Prev</button><span id="pageinfo"></span><button id="next">Next &rarr;</button>
+      <label style="margin-left:auto">Rows per page
+        <select id="perPage"><option>50</option><option>100</option><option selected>200</option><option>500</option><option>1000</option><option>2000</option></select>
+      </label>
+    </div>
+  </section>
+
+  <!-- ============ DUPLICATES ============ -->
+  <section class="pane" id="pane-dupes">
+    <div class="bar" style="border:1px solid var(--line);border-radius:8px">
+      <span class="muted">Found before anything is copied: identical files, same ASIN/ISBN, same or similar title by the same author, or an audiobook with the same author and running time. "Book 1" never pairs with "Book 2". The highlighted copy is the recommended keeper (best format, bitrate, chapters, cover, fewest parts). Different ebook formats of one book are <b>merged</b> into one folder, the way Calibre wants them.</span>
+    </div>
+    <div class="bar" style="border:1px solid var(--line);border-radius:8px">
+      <label>Resolve every group:
+        <select id="dupPolicy">
+          <option value="smart">recommended keeper (merge ebook formats)</option>
+          <option value="keep_best_format">best format</option>
+          <option value="keep_largest">largest</option>
+          <option value="keep_newest">newest files</option>
+          <option value="keep_oldest">oldest files</option>
+          <option value="keep_fewest_files">fewest files</option>
+          <option value="keep_all">keep ALL - number extra folders at copy time</option>
+        </select></label>
+      <button class="primary" id="btnDedupe">Resolve all</button>
+      <span class="muted" id="dupSummary"></span>
+    </div>
+    <div id="dupeList"></div>
+  </section>
+
+  <!-- ============ AUTHORS ============ -->
+  <section class="pane" id="pane-authors">
+    <div class="bar" style="border:1px solid var(--line);border-radius:8px">
+      <span class="muted"><b>high</b> = identical after normalising (accents, initials, "Last, First") - safe. <b>medium</b> = likely typo. <b>low</b> = look carefully ("Robert Jordan" vs "Robert Jordan Jr."). <b>glued</b> = several authors in one name. Approved merges become permanent aliases, applied on every future scan; rejections are remembered too.</span>
+    </div>
+    <div class="bar" style="border:1px solid var(--line);border-radius:8px">
+      <button class="primary" id="btnAuthorsAuto">Approve all "high"</button>
+      <button id="btnAuthorsReload">Refresh</button>
+      <span class="muted" id="authSummary"></span>
+    </div>
+    <div id="authorList"></div>
+  </section>
+
+  <!-- ============ SETTINGS ============ -->
+  <section class="pane" id="pane-settings">
+    <div class="sgrid">
+      <div class="card">
+        <h3>AI provider</h3>
+        <p class="muted">Only books still below the confidence threshold after enrichment are sent, with the evidence gathered for them. Answers are cached against the files' content, so rescans never pay twice.</p>
+        <div class="field"><label>Provider</label>
+          <select id="sProvider"><option value="anthropic">Anthropic (Claude)</option><option value="openai">OpenAI-compatible (OpenAI, Ollama, LM Studio...)</option></select></div>
+        <div class="field"><label>API key <span class="muted">(stored in the data folder on this machine; not needed for a local Ollama)</span></label>
+          <input type="password" id="sKey" placeholder="sk-ant-..."></div>
+        <div class="field"><label>Model</label><input type="text" id="sModel"></div>
+        <div class="field" id="baseRow"><label>Base URL <span class="muted">(e.g. http://192.168.1.10:11434/v1 for Ollama)</span></label><input type="text" id="sBase"></div>
+        <button class="primary" id="btnSaveSettings">Save</button> <button id="btnTestAi">Test connection</button>
+        <span class="muted" id="sTestOut"></span>
+      </div>
+      <div class="card">
+        <h3>How much to trust, how much to ask</h3>
+        <div class="field"><label>Confidence threshold - books below this are "low confidence" and go to the AI</label><input type="number" id="sThr" min="0" max="100"></div>
+        <div class="field"><label>Auto-apply AI answers at or above this confidence (below it they wait for your review)</label><input type="number" id="sAuto" min="0" max="100"></div>
+        <div class="field"><label>Max books per AI run (cost guard)</label><input type="number" id="sMax" min="1"></div>
+        <div class="field"><label>Audible marketplace</label>
+          <select id="sRegion"><option value="com">US (.com)</option><option value="co.uk">UK</option><option value="ca">Canada</option><option value="com.au">Australia</option><option value="de">Germany</option><option value="fr">France</option><option value="it">Italy</option><option value="es">Spain</option><option value="co.jp">Japan</option><option value="in">India</option></select></div>
+      </div>
+      <div class="card">
+        <h3>Listen to the intro</h3>
+        <p class="muted">Most audiobooks open with "<i>Title</i>, by <i>Author</i>, narrated by <i>Narrator</i>". With speech-to-text on, the first seconds of each uncertain audiobook are transcribed locally (nothing is uploaded) and handed to the AI as evidence.</p>
+        <div id="whisperState" class="note" style="margin-bottom:8px"></div>
+        <label><input type="checkbox" id="sTranscribe"> Transcribe audiobook intros for AI runs</label>
+        <div class="field" style="margin-top:8px"><label>Speech model</label>
+          <select id="sWhisper"><option>tiny.en</option><option>base.en</option><option>small.en</option><option>small</option></select></div>
+        <div class="field"><label>Seconds to listen</label><input type="number" id="sIntro" min="20" max="300"></div>
+      </div>
+      <div class="card">
+        <h3>Remembered decisions</h3>
+        <div class="kv" id="dbStats"></div>
+      </div>
+    </div>
+  </section>
+
+  <div class="logwrap" id="log"></div>
+</main>
+
+<!-- ============ DETAIL DRAWER ============ -->
+<aside id="drawer"></aside>
+
+<div id="pickerOverlay" style="display:none;position:fixed;inset:0;background:rgba(27,39,51,.55);z-index:50">
+  <div style="background:#fff;max-width:520px;margin:8vh auto;border-radius:10px;padding:20px 22px;max-height:70vh;display:flex;flex-direction:column">
+    <h3 style="margin:0 0 4px;font-size:1rem">Choose a folder</h3>
+    <div style="display:flex;gap:6px;margin-bottom:8px">
+      <input type="text" id="pickerGoto" placeholder="Type or paste a path, e.g. D:\Books or \\NAS\share\folder" style="flex:1;min-width:0">
+      <button id="pickerGo">Go</button>
+    </div>
+    <div id="pickerPath" style="font-family:var(--mono);font-size:.78rem;color:#6B7684;margin-bottom:10px;word-break:break-all"></div>
+    <div id="pickerList" style="overflow:auto;border:1px solid var(--line);border-radius:6px;flex:1;min-height:180px"></div>
+    <div style="display:flex;gap:10px;margin-top:12px;justify-content:flex-end">
+      <button id="pickerCancel">Cancel</button><button class="primary" id="pickerSelect">Select this folder</button>
+    </div>
+  </div>
+</div>
+
+<script>
+let page=1, pages=1, logNext=0, busy=false, lastCounts={}, tab="books", settingsCache=null;
+const selected=new Set();
+const store={get(k){try{return localStorage.getItem(k)}catch(e){return null}},set(k,v){try{localStorage.setItem(k,v)}catch(e){}}};
+const $=id=>{const el=document.getElementById(id); if(!el) console.error("Library Organizer UI: missing #"+id); return el;};
+const esc=s=>String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const J=(body)=>({method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body||{})});
+async function api(url,opts){
+  const r=await fetch(url,opts); const j=await r.json().catch(()=>({}));
+  if(!r.ok){alert(j.error||("Request failed: "+r.status)); throw new Error(j.error);}
+  return j;
+}
+function confBadge(c){const cls=c>=80?"c-hi":c>=50?"c-mid":"c-lo"; return `<span class="conf ${cls}">${c}</span>`;}
+function rowClass(b){
+  if(b.status==="copied") return "copied"; if(b.status==="skipped") return "skipped";
+  if(b.status.startsWith("ERROR")) return "error"; if(!b.author||!b.title) return "review";
+  if(b.dup) return "dup"; if(/^(Audible|Google|Open Library|online)/.test(b.meta)) return "online"; return "";
+}
+
+// ---------------- tabs ----------------
+function showTab(t){
+  tab=t;
+  document.querySelectorAll(".tab").forEach(x=>x.classList.toggle("on",x.dataset.tab===t));
+  document.querySelectorAll(".pane").forEach(x=>x.classList.toggle("on",x.id==="pane-"+t));
+  if(t==="books") loadBooks(); if(t==="dupes") loadDupes(); if(t==="authors") loadAuthors(); if(t==="settings") loadSettings();
+}
+document.querySelectorAll(".tab").forEach(x=>x.onclick=()=>showTab(x.dataset.tab));
+$("btnTabDupes").onclick=()=>showTab("dupes");
+
+// ---------------- books ----------------
+async function loadBooks(){
+  const q=encodeURIComponent($("q").value), st=$("statusFilter").value;
+  const d=await api(`/api/books?page=${page}&q=${q}&status=${st}&sort=${$("sort").value}&layout=${$("layout").value}&per_page=${$("perPage").value}&number_folders=${$("numberFolders").checked?1:0}`);
+  pages=d.pages; $("pageinfo").textContent=`Page ${d.page} / ${d.pages} - ${d.total} book(s)`;
+  const tb=$("rows"); tb.innerHTML="";
+  for(const b of d.books){
+    const tr=document.createElement("tr"); tr.className=rowClass(b); tr.dataset.id=b.id;
+    const flags=(b.ai?`<span class="flag f-ai" title="AI has a suggestion - open details">AI?</span>`:"")+
+                (b.health?`<span class="flag f-bad" title="${esc(b.health)}">damaged?</span>`:"")+
+                (b.flags||[]).map(f=>`<span class="flag f-bad" title="${esc(f)}">${f.includes("narrator")?"narrator?":"check"}</span>`).join("");
+    tr.innerHTML=`<td><input type="checkbox" class="sel"${selected.has(b.id)?" checked":""}></td>`+
+      `<td class="thumb">${b.cover?`<img loading="lazy" src="/api/book/${b.id}/cover.img" alt="">`:`<div class="none" title="no cover"></div>`}</td>`+
+      `<td>${b.kind}</td>`+
+      `<td contenteditable data-f="author">${esc(b.author)}</td>`+
+      `<td contenteditable data-f="series">${esc(b.series)}</td>`+
+      `<td contenteditable data-f="series_index">${esc(b.series_index)}</td>`+
+      `<td contenteditable data-f="title">${esc(b.title)}</td>`+
+      `<td contenteditable data-f="narrator">${esc(b.narrator)}</td>`+
+      `<td style="white-space:nowrap">${esc(b.length)}</td>`+
+      `<td>${confBadge(b.conf)}${flags}</td>`+
+      `<td class="dest">${esc(b.dest)}</td>`+
+      `<td class="dest">${esc(b.src)} (${b.files} file${b.files>1?"s":""})</td>`+
+      `<td>${esc(b.meta)}</td><td class="st">${esc(b.status)}</td>`+
+      `<td style="white-space:nowrap"><button class="rowbtn info" title="Details, covers, AI">&#9432;</button>`+
+      `<button class="rowbtn skipbtn" title="Skip / un-skip">&#8856;</button>`+
+      `<button class="rowbtn del" title="Remove from plan">&#10005;</button></td>`;
+    tb.appendChild(tr);
+  }
+  updateBulk();
+  if(!d.books.length) tb.innerHTML=`<tr><td colspan="15" class="muted">No books match.</td></tr>`;
+}
+document.addEventListener("focusout",async e=>{
+  const td=e.target.closest("td[contenteditable]"); if(!td) return;
+  const tr=td.closest("tr"); const b=await api(`/api/book/${tr.dataset.id}`,J({[td.dataset.f]:td.textContent.trim()}));
+  tr.className=rowClass(b); tr.querySelector("td.dest").textContent=b.dest; tr.querySelector("td.st").textContent=b.status;
+  tr.children[9].innerHTML=confBadge(b.conf);
+});
+document.addEventListener("click",async e=>{
+  const t=e.target, tr=t.closest("tr");
+  if(t.classList.contains("info")) return openDrawer(+tr.dataset.id);
+  if(t.classList.contains("skipbtn")){const b=await api(`/api/book/${tr.dataset.id}/skip`,{method:"POST"});tr.className=rowClass(b);tr.querySelector("td.st").textContent=b.status;return;}
+  if(t.classList.contains("del")){await api(`/api/book/${tr.dataset.id}`,{method:"DELETE"});selected.delete(+tr.dataset.id);tr.remove();updateBulk();}
+});
+function updateBulk(){
+  const n=selected.size, onPage=document.querySelectorAll(".sel:checked").length;
+  $("bulkbar").style.display=n?"flex":"none";
+  $("bulkCount").textContent=n+" checked"+(n>onPage?" (across pages)":"")+":";
+  $("checkAll").checked=onPage>0&&onPage===document.querySelectorAll(".sel").length;
+}
+document.addEventListener("change",e=>{
+  if(e.target.classList.contains("sel")){const id=+e.target.closest("tr").dataset.id;e.target.checked?selected.add(id):selected.delete(id);updateBulk();}
+  if(e.target.id==="checkAll"){document.querySelectorAll(".sel").forEach(cb=>{cb.checked=e.target.checked;const id=+cb.closest("tr").dataset.id;e.target.checked?selected.add(id):selected.delete(id);});updateBulk();}
+});
+$("btnUncheck").onclick=()=>{selected.clear();document.querySelectorAll(".sel,#checkAll").forEach(cb=>cb.checked=false);updateBulk();};
+$("btnBulk").onclick=async()=>{
+  const f={}; if($("bulkAuthor").value.trim()) f.author=$("bulkAuthor").value.trim();
+  if($("bulkSeries").value.trim()) f.series=$("bulkSeries").value.trim();
+  if($("bulkIdx").value.trim()) f.series_index=$("bulkIdx").value.trim();
+  if($("bulkNarr").value.trim()) f.narrator=$("bulkNarr").value.trim();
+  await api("/api/bulk",J({ids:[...selected],fields:f}));
+  ["bulkAuthor","bulkSeries","bulkIdx","bulkNarr"].forEach(i=>$(i).value=""); selected.clear(); loadBooks();
+};
+$("btnSkipChecked").onclick=async()=>{await api("/api/bulk",J({ids:[...selected],action:"skip"}));selected.clear();loadBooks();};
+$("btnUnskipChecked").onclick=async()=>{await api("/api/bulk",J({ids:[...selected],action:"unskip"}));selected.clear();loadBooks();};
+$("btnEnrichChecked").onclick=async()=>{await api("/api/enrich",J({ids:[...selected],...enrichOpts()}));selected.clear();};
+$("btnAiChecked").onclick=async()=>{await api("/api/ai",J({ids:[...selected]}));selected.clear();};
+$("btnExport").onclick=()=>{window.location="/api/export.csv";};
+$("btnJournal").onclick=()=>{window.location="/api/journal.csv";};
+$("q").oninput=()=>{page=1;loadBooks();};
+$("statusFilter").onchange=()=>{page=1;loadBooks();};
+$("sort").onchange=()=>{page=1;loadBooks();};
+$("prev").onclick=()=>{if(page>1){page--;loadBooks();}};
+$("next").onclick=()=>{if(page<pages){page++;loadBooks();}};
+$("perPage").onchange=()=>{store.set("lo_perpage",$("perPage").value);page=1;loadBooks();};
+if(store.get("lo_perpage")) $("perPage").value=store.get("lo_perpage");
+$("layout").onchange=()=>loadBooks();
+$("numberFolders").onchange=()=>{store.set("lo_numfold",$("numberFolders").checked?"1":"0");loadBooks();};
+if(store.get("lo_numfold")==="1") $("numberFolders").checked=true;
+
+// ---------------- drawer ----------------
+let drawerId=null;
+async function openDrawer(id){
+  drawerId=id; const d=await api(`/api/book/${id}`); const dr=$("drawer");
+  const F=(k,label,ta)=>`<div class="field"><label>${label}${d.locked.includes(k)?' <span class="flag f-lock">yours</span>':""}</label>`+
+    (ta?`<textarea class="efield" data-k="${k}" rows="4">${esc(d[k])}</textarea>`:`<input type="text" class="efield" data-k="${k}" value="${esc(d[k])}">`)+`</div>`;
+  const ai=d.ai&&d.ai.title?`<div class="aibox"><b>AI (${d.ai.confidence}%):</b> ${esc(d.ai.author)} &mdash; <i>${esc(d.ai.title)}</i>`+
+    (d.ai.series?` &middot; ${esc(d.ai.series)} ${esc(d.ai.series_index||"")}`:"")+(d.ai.narrator?` &middot; read by ${esc(d.ai.narrator)}`:"")+
+    `<div class="muted">${esc(d.ai.reason||"")}</div>`+(d.ai.pending?`<button class="primary small" id="aiAccept" style="margin-top:6px">Accept AI suggestion</button>`:`<div class="muted">applied</div>`)+`</div>`:"";
+  const ob=d.online_best&&d.online_best.title?`<div class="kv" style="margin:6px 0"><div>Best online</div><div>${esc(d.online_best.source)} (${d.online_best.score}): ${esc(d.online_best.author)} &mdash; ${esc(d.online_best.title)}${d.online_best.runtime?" &middot; "+Math.round(d.online_best.runtime/360)/10+" h":""}</div></div>`:"";
+  const covers=(d.cover_candidates||[]).map(c=>`<figure data-idx="${c.idx}" class="${d.cover_info&&d.cover_info.startsWith(c.w+"x"+c.h+" "+c.origin)?"on":""}"><img loading="lazy" src="/api/book/${id}/cover.img?c=${c.idx}"><figcaption>${c.w}&times;${c.h}<br>${esc(c.origin)}</figcaption></figure>`).join("");
+  dr.innerHTML=`<div style="display:flex;justify-content:space-between;align-items:start;gap:10px">
+      <div><h2>${esc(d.title)}</h2><div class="muted">${esc(d.author)} &middot; ${d.kind} &middot; ${confBadge(d.conf)} &middot; from ${esc(d.meta)}</div></div>
+      <button id="drClose">Close</button></div>
+    ${d.health?`<div class="note" style="margin-top:8px;background:#F6D0D0;border-color:#E5AFAF;color:#6B2A20">Possibly damaged: ${esc(d.health)}</div>`:""}
+    ${(d.flags||[]).map(f=>`<div class="note" style="margin-top:8px">Check: ${esc(f)}${f.includes("narrator")?" &mdash; if so, put the real author in Author and this name in Narrator.":""}</div>`).join("")}
+    <h3 style="font-size:.88rem;margin:14px 0 4px">Cover</h3>
+    <div class="covers">${covers||'<span class="muted">No covers found yet - run Enrich, or paste an image URL.</span>'}</div>
+    <div style="display:flex;gap:6px"><input type="text" id="coverUrl" placeholder="...or paste an image URL" style="flex:1;min-width:0"><button class="small" id="coverUrlBtn">Use</button></div>
+    ${ai}${ob}
+    <h3 style="font-size:.88rem;margin:14px 0 4px">Metadata <span class="muted">(everything you change here is remembered)</span></h3>
+    ${F("title","Title")}${F("author","Author")}
+    <div style="display:grid;grid-template-columns:1fr 90px;gap:8px">${F("series","Series")}${F("series_index","#")}</div>
+    ${F("narrator","Narrator")}
+    <div style="display:grid;grid-template-columns:90px 1fr;gap:8px">${F("year","Year")}${F("publisher","Publisher")}</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">${F("asin","ASIN")}${F("isbn","ISBN")}</div>
+    <div style="display:grid;grid-template-columns:1fr 110px;gap:8px">${F("genres","Genres")}${F("language","Language")}</div>
+    ${F("description","Description",true)}
+    <button class="primary" id="drSave">Save</button>
+    <h3 style="font-size:.88rem;margin:16px 0 4px">What was found</h3>
+    <div class="kv">
+      ${d.duration?`<div>Length</div><div>${esc(d.length)} ${d.codec?"&middot; "+esc(d.codec):""} ${d.bitrate?"&middot; "+Math.round(d.bitrate/1000)+" kbps":""} ${d.chapters?"&middot; "+d.chapters+" chapters":""}</div>`:""}
+      <div>Filed under</div><div style="font-family:var(--mono);font-size:.74rem">${esc(d.dest)}</div>
+      <div>Source</div><div style="font-family:var(--mono);font-size:.74rem">${esc(d.src)}</div>
+      <div>Files (${d.files})</div><div style="font-family:var(--mono);font-size:.72rem;max-height:120px;overflow:auto">${d.file_list.map(esc).join("<br>")}</div>
+      ${d.transcript?`<div>Spoken intro</div><div><i>${esc(d.transcript)}</i></div>`:""}
+      <div>Fingerprint</div><div style="font-family:var(--mono);font-size:.72rem">${esc(d.fingerprint)}</div>
+    </div>
+    <div style="margin-top:12px;display:flex;gap:6px"><button id="drEnrich">Re-enrich this book</button><button id="drAi">Ask AI about this book</button></div>`;
+  dr.classList.add("on");
+  $("drClose").onclick=()=>dr.classList.remove("on");
+  dr.querySelectorAll(".covers figure").forEach(f=>f.onclick=async()=>{await api(`/api/book/${id}/cover`,J({idx:+f.dataset.idx}));openDrawer(id);loadBooks();});
+  $("coverUrlBtn").onclick=async()=>{const u=$("coverUrl").value.trim(); if(!u) return; await api(`/api/book/${id}/cover`,J({url:u}));openDrawer(id);loadBooks();};
+  if(document.getElementById("aiAccept")) $("aiAccept").onclick=async()=>{await api(`/api/book/${id}/ai_accept`,{method:"POST"});openDrawer(id);loadBooks();};
+  $("drSave").onclick=async()=>{const body={}; dr.querySelectorAll(".efield").forEach(i=>body[i.dataset.k]=i.value);
+    await api(`/api/book/${id}`,J(body)); openDrawer(id); loadBooks();};
+  $("drEnrich").onclick=async()=>{await api("/api/enrich",J({ids:[id],...enrichOpts()}));};
+  $("drAi").onclick=async()=>{await api("/api/ai",J({ids:[id]}));};
+}
+
+// ---------------- duplicates ----------------
+async function loadDupes(){
+  const d=await api("/api/dupes"); const el=$("dupeList");
+  $("dupSummary").textContent=d.groups.length?`${d.groups.length} group(s)`:"";
+  if(!d.groups.length){el.innerHTML=`<div class="card muted">No duplicates found. (Enrich first: fingerprints, running times and ASIN/ISBN catch the most.)</div>`;return;}
+  el.innerHTML=d.groups.map(g=>`<div class="card" data-key="${esc(g.key)}">
+    <div>${g.reasons.map(r=>`<span class="reason">${esc(r.reason)}${r.score<100?" "+r.score:""}</span>`).join("")}${g.merge_formats?'<span class="reason" style="background:#DDEBD9;color:#2E5A28">different formats - merge</span>':""}</div>
+    <table class="dgrid" style="margin-top:6px"><thead><tr><th>Keep</th><th>Title</th><th>Author</th><th>#</th><th>Formats</th><th>Files</th><th>Size</th><th>Length</th><th>kbps</th><th>Ch.</th><th>Cover</th><th>Score</th><th>Source</th></tr></thead><tbody>
+    ${g.members.map(m=>`<tr class="${m.id===g.keep?"keeper":""}"><td><input type="radio" name="k${esc(g.key)}" value="${m.id}"${m.id===g.keep?" checked":""}></td>
+      <td>${esc(m.title)}${m.health?' <span class="flag f-bad">damaged?</span>':""}</td><td>${esc(m.author)}</td><td>${esc(m.series_index)}</td><td>${esc(m.formats)}</td><td>${m.files}</td>
+      <td>${m.size_mb} MB</td><td>${esc(m.length)}</td><td>${m.bitrate}</td><td>${m.chapters||""}</td><td>${m.cover?"yes":""}</td><td>${m.quality}</td>
+      <td class="dest">${esc(m.src)}</td></tr>`).join("")}
+    </tbody></table>
+    <div style="margin-top:8px;display:flex;gap:6px">
+      <button class="primary small" data-act="keep">Keep selected, skip the others</button>
+      ${g.merge_formats?'<button class="small" data-act="merge">Merge formats into selected</button>':""}
+      <button class="small" data-act="dismiss">Not duplicates</button></div></div>`).join("");
+  el.querySelectorAll("button[data-act]").forEach(b=>b.onclick=async()=>{
+    const card=b.closest(".card"), key=card.dataset.key, keep=card.querySelector("input[type=radio]:checked").value;
+    await api("/api/dupes/resolve",J({key,keep,action:b.dataset.act})); loadDupes();});
+}
+$("btnDedupe").onclick=async()=>{
+  const policy=$("dupPolicy").value;
+  if(policy==="keep_all"){alert("Keep ALL: nothing is skipped; extra copies get numbered folders like 'Title (2)' at copy time.");return;}
+  const r=await api("/api/dedupe",J({policy})); alert(`${r.groups} group(s) resolved - ${r.skipped} book(s) skipped or merged. Check the 'skipped' filter to review.`); loadDupes();
+};
+
+// ---------------- authors ----------------
+async function loadAuthors(){
+  const d=await api("/api/authors"); const el=$("authorList");
+  $("authSummary").textContent=d.groups.length?`${d.groups.length} group(s)`:"";
+  if(!d.groups.length){el.innerHTML=`<div class="card muted">No author variants found.</div>`;return;}
+  el.innerHTML=d.groups.map((g,i)=>`<div class="card" data-i="${i}" style="margin-bottom:8px">
+    <span class="reason">${g.confidence}</span> ${g.variants.map(([v,c])=>`<span style="margin-right:12px">${esc(v)} <span class="muted">(${c})</span></span>`).join("")}
+    <div style="margin-top:6px;display:flex;gap:6px;align-items:center"><span class="muted">${g.confidence==="glued"?"Use as author:":"Merge into:"}</span>
+      <input type="text" class="canon" value="${esc(g.canonical)}" style="min-width:260px">
+      <button class="primary small" data-act="merge">${g.confidence==="glued"?"Use":"Merge"}</button>
+      ${g.confidence!=="glued"?'<button class="small" data-act="reject">Different people</button>':""}</div></div>`).join("");
+  el.querySelectorAll("button[data-act]").forEach(b=>b.onclick=async()=>{
+    const card=b.closest(".card"), g=d.groups[+card.dataset.i], variants=g.variants.map(v=>v[0]);
+    if(b.dataset.act==="merge") await api("/api/authors/merge",J({variants,canonical:card.querySelector(".canon").value}));
+    else await api("/api/authors/reject",J({variants}));
+    card.remove();});
+}
+$("btnAuthorsAuto").onclick=async()=>{const r=await api("/api/authors/auto",{method:"POST"});alert(`${r.groups} group(s) merged, ${r.books} book(s) updated.`);loadAuthors();};
+$("btnAuthorsReload").onclick=loadAuthors;
+
+// ---------------- settings ----------------
+async function loadSettings(){
+  const s=await api("/api/settings"); settingsCache=s;
+  $("sProvider").value=s.provider; $("sKey").value=s.api_key; $("sModel").value=s.model; $("sBase").value=s.base_url;
+  $("sThr").value=s.threshold; $("sAuto").value=s.auto_apply; $("sMax").value=s.max_books; $("sRegion").value=s.audible_region;
+  $("sTranscribe").checked=s.transcribe; $("sWhisper").value=s.whisper_model; $("sIntro").value=s.intro_seconds;
+  $("baseRow").style.display=s.provider==="openai"?"flex":"none";
+  $("whisperState").innerHTML=s.have_whisper?"Speech-to-text is installed and ready.":
+    "Speech-to-text is not installed. Windows: <code>pip install faster-whisper</code>. Docker: build with <code>WITH_WHISPER=1</code> (see INSTALL.md).";
+  $("dbStats").innerHTML=`<div>Data folder</div><div style="font-family:var(--mono);font-size:.74rem">${esc(s.data_dir)}</div>`+
+    Object.entries(s.db).map(([k,v])=>`<div>${esc(k.replace("_"," "))}</div><div>${v}</div>`).join("");
+}
+$("sProvider").onchange=()=>{$("baseRow").style.display=$("sProvider").value==="openai"?"flex":"none";
+  if($("sProvider").value==="openai"&&$("sModel").value.startsWith("claude")) $("sModel").value="llama3.1:8b";
+  if($("sProvider").value==="anthropic"&&!$("sModel").value.startsWith("claude")) $("sModel").value="claude-haiku-4-5-20251001";};
+$("btnSaveSettings").onclick=async()=>{
+  await api("/api/settings",J({provider:$("sProvider").value,api_key:$("sKey").value,model:$("sModel").value,base_url:$("sBase").value,
+    threshold:+$("sThr").value,auto_apply:+$("sAuto").value,max_books:+$("sMax").value,audible_region:$("sRegion").value,
+    transcribe:$("sTranscribe").checked,whisper_model:$("sWhisper").value,intro_seconds:+$("sIntro").value}));
+  $("sTestOut").textContent="Saved."; loadSettings();
+};
+$("btnTestAi").onclick=async()=>{$("sTestOut").textContent="Testing...";
+  try{const r=await api("/api/settings/test",{method:"POST"}); $("sTestOut").textContent="Reply: "+r.reply;}catch(e){$("sTestOut").textContent="Failed.";}};
+
+// ---------------- pipeline ----------------
+function scanOpts(){return {source:$("source").value,audio:$("audio").checked,ebooks:$("ebooks").checked,
+  strip_parens:$("stripParens").checked,trust_folders:$("trustFolders").checked,distrust_json:$("distrustJson").checked,
+  distrust_opf:$("distrustOpf").checked,distrust_tags:$("distrustTags").checked};}
+function enrichOpts(){return {online:$("online").checked,covers:$("covers").checked,fix_names:$("fixNames").checked};}
+$("btnScan").onclick=async()=>{selected.clear();updateBulk();await api("/api/scan",J(scanOpts()));};
+$("btnEnrich").onclick=async()=>{await api("/api/enrich",J(enrichOpts()));};
+$("btnAi").onclick=async()=>{await api("/api/ai",J({which:"low"}));};
+$("btnAuto").onclick=async()=>{
+  if(lastCounts.total&&!confirm("Autopilot rescans the source and rebuilds the plan. Your earlier edits, author merges and duplicate decisions are remembered and re-applied. Continue?")) return;
+  selected.clear(); await api("/api/autopilot",J({...scanOpts(),...enrichOpts(),use_ai:$("useAi").checked,resolve_dupes:$("autoDupes").checked}));
+};
+$("btnStop").onclick=async()=>{await api("/api/cancel",{method:"POST"});};
+$("btnCopy").onclick=async()=>{
+  let msg="Copy all not-yet-copied books into "+$("dest").value+"?\n\nOriginals are never modified. Skipped books are left out.";
+  if(lastCounts.dups) msg+="\n\n"+lastCounts.dups+" book(s) are still in unresolved duplicate groups (Duplicates tab).";
+  if(lastCounts.low) msg+="\n"+lastCounts.low+" book(s) are below the confidence threshold ('low confidence' filter).";
+  if(!confirm(msg)) return;
+  const body={dest:$("dest").value,source:$("source").value,write_opf:$("writeOpf").checked,layout:$("layout").value,
+    rename_parts:$("renameParts").checked,dup_policy:$("dupPolicy").value,write_json:$("writeJson").checked,
+    embed:$("embedTags").checked,number_folders:$("numberFolders").checked,write_cover:$("writeCover").checked,
+    embed_cover:$("embedCover").checked,min_conf:+$("minConf").value,
+    hold_damaged:$("holdDamaged").checked,hold_review:$("holdReview").checked};
+  const r=await fetch("/api/copy",J(body));
+  if(r.status===507){const j=await r.json(); if(confirm(j.error+"\n\nCopy anyway?")){body.force=true;await api("/api/copy",J(body));}}
+  else if(!r.ok){const j=await r.json().catch(()=>({}));alert(j.error||("Request failed: "+r.status));}
+};
+
+// ---------------- folder picker ----------------
+let pickerTarget=null, pickerCur="/";
+async function pickerLoad(path){
+  const list=$("pickerList");
+  list.innerHTML='<div style="padding:10px 12px;color:#98A2AE;font-size:.82rem">Loading...</div>';
+  const r=await fetch("/api/browse?path="+encodeURIComponent(path)); const d=await r.json().catch(()=>({}));
+  if(!r.ok){list.innerHTML=`<div style="padding:10px 12px;color:#A33;font-size:.82rem">${esc(d.error||"Could not open that folder")}</div>`;return;}
+  pickerCur=d.path; $("pickerPath").textContent=d.path; $("pickerGoto").value=d.path==="My Computer"?"":d.path;
+  list.innerHTML="";
+  const mk=(label,go)=>{const div=document.createElement("div");div.textContent=label;
+    div.style.cssText="padding:7px 12px;cursor:pointer;border-bottom:1px solid #EFEBE1;font-size:.85rem";
+    div.onmouseenter=()=>div.style.background="#F6F2E8";div.onmouseleave=()=>div.style.background="";div.onclick=()=>pickerLoad(go);list.appendChild(div);};
+  if(d.parent!==null&&d.parent!==undefined) mk("\u2B06 .. (up)",d.parent);
+  for(const dir of d.dirs){let go;
+    if(d.path==="My Computer") go=dir; else if(d.path==="/") go="/"+dir;
+    else go=d.path.replace(/[\\/]$/,"")+(d.path.includes("\\")||/^[A-Za-z]:/.test(d.path)?"\\":"/")+dir;
+    mk("\uD83D\uDCC1 "+dir,go);}
+  if(!d.dirs.length){const e=document.createElement("div");e.textContent="(no subfolders)";e.style.cssText="padding:10px 12px;color:#98A2AE;font-size:.82rem";list.appendChild(e);}
+}
+function openPicker(id){pickerTarget=id;$("pickerOverlay").style.display="block";pickerLoad($(id).value||"/");}
+$("browseSrc").onclick=()=>openPicker("source"); $("browseDst").onclick=()=>openPicker("dest");
+$("pickerGo").onclick=()=>{const p=$("pickerGoto").value.trim(); if(p) pickerLoad(p);};
+$("pickerGoto").onkeydown=e=>{if(e.key==="Enter") $("pickerGo").click();};
+$("pickerCancel").onclick=()=>{$("pickerOverlay").style.display="none";};
+$("pickerSelect").onclick=()=>{$(pickerTarget).value=pickerCur;$("pickerOverlay").style.display="none";};
+
+// ---------------- poll ----------------
+async function poll(){
+  try{
+    const s=await api(`/api/state?log_since=${logNext}`); logNext=s.log_next;
+    if(s.log.length){const el=$("log");el.textContent+=s.log.join("\n")+"\n";el.scrollTop=el.scrollHeight;}
+    const [c,t]=s.progress; $("progressBar").style.width=(t?100*c/t:(s.busy?30:0))+"%";
+    lastCounts=s.counts; const k=s.counts;
+    const pill=(n,color,label,f)=>n?`<span data-f="${f}"><i class="dot" style="background:${color}"></i>${n} ${label}</span>`:"";
+    $("counts").innerHTML=`<span data-f=""><b>${k.total}</b> books</span>`+pill(k.low,"#F2C9C4","low confidence","low")+
+      pill(k.review,"var(--warn)","review","review")+pill(k.ai,"#DCE3F6","AI to review","ai")+pill(k.dups,"var(--dupc)","in dup groups","dups")+
+      pill(k.damaged,"var(--bad)","damaged?","damaged")+pill(k.copied,"var(--good)","copied","copied")+pill(k.skipped,"#E9E9E9","skipped","skipped")+
+      pill(k.error,"var(--bad)","errors","");
+    $("tDupes").textContent=k.dups?`(${k.dups})`:"";
+    if(s.busy&&t>0&&c>3&&s.elapsed>5){const rem=(s.elapsed/c)*(t-c),m=Math.floor(rem/60);
+      $("eta").textContent=`${s.task}: ${c} / ${t} - about ${m>0?m+" min":Math.ceil(rem)+" sec"} remaining`;}
+    else $("eta").textContent=s.busy?s.task+"...":"";
+    ["btnScan","btnCopy","btnEnrich","btnAi","btnAuto"].forEach(i=>$(i).disabled=s.busy);
+    $("btnStop").style.display=s.busy?"inline-block":"none";
+    if(busy&&!s.busy){ if(tab==="books") loadBooks(); if(tab==="dupes") loadDupes(); if(tab==="authors") loadAuthors(); }
+    busy=s.busy;
+  }catch(e){}
+  setTimeout(poll,1200);
+}
+$("counts").onclick=e=>{const sp=e.target.closest("span[data-f]"); if(!sp) return; showTab("books"); $("statusFilter").value=sp.dataset.f; page=1; loadBooks();};
+poll(); loadBooks();
+</script>
+</body>
+</html>

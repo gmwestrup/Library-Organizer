@@ -1,0 +1,34 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# Runtime data this app creates (never source-controlled)
+*.organizer-plan.json
+organizer-plan.json
+organizer.db*
+settings.json
+covers/
+config/
+.organizer/
+
+# OS cruft
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Editors
+.vscode/
+.idea/
+*.swp
+
+# Local override files people sometimes make from the templates
+docker/docker-compose.override.yml
+docker/docker-compose.local.yml
+
+# Anything a real test run against a real library might drop here
+/scratch/
+/test-library/
+/test-output/

@@ -1,0 +1,30 @@
+# ============================================================
+# HOST-NETWORKING VARIANT
+# Use this when the app runs but http://NAS-IP:8765 is
+# unreachable while `curl http://localhost:8765` works on the
+# NAS (Docker's port NAT misbehaving - common on NAS with many
+# container networks).
+#
+#   sudo docker rm -f library-organizer
+#   sudo docker compose -f docker-compose.host.yml up -d
+#
+# Requires port 8765 free on the NAS itself; if logs say
+# "address already in use", change PORT below (e.g. 8766).
+# Edit the three volume paths exactly as in docker-compose.yml.
+# ============================================================
+services:
+  library-organizer:
+    image: python:3.12-slim
+    container_name: library-organizer
+    network_mode: host
+    working_dir: /app
+    command: sh -c "pip install --no-cache-dir -r requirements.txt && python app.py"
+    volumes:
+      - /path/to/library-organizer/docker:/app            # 1. app files
+      - /path/to/your/messy-library:/source:ro            # 2. messy library (read-only)
+      - /path/to/your/clean-output:/dest                     # 3. clean output
+      - /path/to/library-organizer/config:/config            # 4. decisions DB, covers, settings (back up!)
+    environment:
+      - PORT=8765
+      - DATA_DIR=/config
+    restart: unless-stopped

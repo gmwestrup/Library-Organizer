@@ -1,0 +1,34 @@
+<svg viewBox="0 0 900 300" xmlns="http://www.w3.org/2000/svg" font-family="Consolas, 'Cascadia Code', monospace" role="img" aria-labelledby="t2 d2">
+<title id="t2">Before and after folder structure</title>
+<desc id="d2">A messy, inconsistently named folder tree on the left is transformed into a clean Author, Series, Title structure with correct metadata on the right.</desc>
+<rect width="900" height="300" fill="#1B2733"/>
+<!-- BEFORE panel -->
+<rect x="24" y="24" width="392" height="252" rx="8" fill="#22313F" stroke="#33455636"/>
+<text x="44" y="52" font-family="Segoe UI, sans-serif" font-size="10" letter-spacing="2" fill="#8DA3B5">BEFORE</text>
+<g font-size="12" fill="#B9C6D1">
+<text x="44" y="82">Downloads\</text>
+<text x="52" y="102" fill="#D08B7E">├─ THE MARTIAN by andy weir.m4b</text>
+<text x="52" y="122" fill="#D08B7E">├─ sanderson_mistborn1_finalempire\</text>
+<text x="68" y="140" fill="#6C7E8F" font-size="10.5">     01.mp3 … 47.mp3</text>
+<text x="52" y="162" fill="#D08B7E">├─ New folder (3)\</text>
+<text x="68" y="180" fill="#D08B7E" font-size="11">     wise mans fear book2.m4b</text>
+<text x="52" y="202" fill="#D08B7E">├─ notw (1).epub</text>
+<text x="52" y="222" fill="#D08B7E">└─ LNSR01-95 Larry Niven -</text>
+<text x="68" y="240" fill="#D08B7E">    Saturn's Race.mp3  (×95)</text>
+</g>
+<!-- arrow -->
+<text x="450" y="162" font-size="30" fill="#C2913A" text-anchor="middle">➔</text>
+<!-- AFTER panel -->
+<rect x="484" y="24" width="392" height="252" rx="8" fill="#22313F" stroke="#33455636"/>
+<text x="504" y="52" font-family="Segoe UI, sans-serif" font-size="10" letter-spacing="2" fill="#C2913A">AFTER</text>
+<g font-size="12" fill="#D7E3DC">
+<text x="504" y="82">Library\</text>
+<text x="512" y="102"><tspan fill="#C2913A">Andy Weir</tspan>\The Martian\</text>
+<text x="512" y="122"><tspan fill="#C2913A">Brandon Sanderson</tspan>\<tspan fill="#8DA3B5">Mistborn</tspan>\</text>
+<text x="528" y="140">The Final Empire\</text>
+<text x="512" y="160"><tspan fill="#C2913A">Patrick Rothfuss</tspan>\<tspan fill="#8DA3B5">Kingkiller</tspan></text>
+<text x="528" y="178"><tspan fill="#8DA3B5">Chronicle</tspan>\The Wise Man's Fear\</text>
+<text x="512" y="198"><tspan fill="#C2913A">Larry Niven</tspan>\Saturn's Race\</text>
+<text x="528" y="216" fill="#6C7E8F" font-size="10.5">metadata.opf · series # embedded</text>
+</g>
+</svg>

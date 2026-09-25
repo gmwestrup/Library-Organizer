@@ -1,0 +1,35 @@
+# ============================================================
+# LIBRARY ORGANIZER - stack / compose file (v2)
+# Works pasted into Portainer as a Stack, or via SSH:
+#     sudo docker compose up -d
+#
+# ASUSTOR NOTE: Docker on Asustor resolves host paths under
+# /share/, and share names are CASE-SENSITIVE. Use the exact
+# names shown by:  ls /share
+# Never use /volume1-style paths here.
+#
+# Paths below are pre-filled for this NAS - adjust if needed:
+#   1. app folder  = where app.py / core.py / templates live
+#   2. source      = your messy library (read-only, never touched)
+#   3. dest        = output folder for the clean structure
+#   4. config      = where your remembered decisions live (keep it!)
+# This quick variant has no ffmpeg (mutagen probes audio instead);
+# docker-compose.build.yml builds an image WITH ffmpeg.
+# ============================================================
+services:
+  library-organizer:
+    image: python:3.12-slim
+    container_name: library-organizer
+    working_dir: /app
+    command: sh -c "pip install --no-cache-dir -r requirements.txt && python app.py"
+    ports:
+      - "8765:8765"
+    volumes:
+      - /path/to/library-organizer/docker:/app            # 1. app files
+      - /path/to/your/messy-library:/source:ro            # 2. messy library (read-only)
+      - /path/to/your/clean-output:/dest                     # 3. clean output
+      - /path/to/library-organizer/config:/config            # 4. decisions DB, covers, settings (back up!)
+    environment:
+      - PORT=8765
+      - DATA_DIR=/config
+    restart: unless-stopped

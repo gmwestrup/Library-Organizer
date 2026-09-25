@@ -1,0 +1,93 @@
+<svg viewBox="0 0 960 560" xmlns="http://www.w3.org/2000/svg" font-family="Segoe UI, -apple-system, sans-serif" role="img" aria-labelledby="t d">
+<title id="t">Library Organizer review screen</title>
+<desc id="d">Browser UI showing source/destination pickers, output structure and metadata-trust options, a color-coded filterable review table, a bulk-edit bar, and a live log with progress bar.</desc>
+<rect width="960" height="560" fill="#F4F1EA"/>
+<!-- title bar -->
+<rect width="960" height="34" fill="#1B2733"/>
+<circle cx="16" cy="17" r="5" fill="#E0897B"/><circle cx="32" cy="17" r="5" fill="#E5C06B"/><circle cx="48" cy="17" r="5" fill="#8FBF8F"/>
+<text x="70" y="22" font-size="12" fill="#E9EDF1" font-weight="600">Library Organizer</text>
+<text x="205" y="22" font-family="Consolas,monospace" font-size="8.5" fill="#C2913A" letter-spacing="1">SCAN · REVIEW · COPY — v1.10.3</text>
+<!-- bar 1: source / dest / structure / scan+copy -->
+<rect x="0" y="34" width="960" height="36" fill="#fff"/>
+<text x="12" y="56" font-size="10" fill="#4B5764">Source</text>
+<rect x="54" y="43" width="140" height="18" rx="4" fill="#fff" stroke="#C9C2B2"/><text x="60" y="56" font-family="Consolas,monospace" font-size="9" fill="#444">/source</text>
+<rect x="198" y="43" width="56" height="18" rx="4" fill="#F1EDE2" stroke="#C9C2B2"/><text x="206" y="56" font-size="9" fill="#333">Browse…</text>
+<text x="266" y="56" font-size="10" fill="#4B5764">Destination</text>
+<rect x="324" y="43" width="140" height="18" rx="4" fill="#fff" stroke="#C9C2B2"/><text x="330" y="56" font-family="Consolas,monospace" font-size="9" fill="#444">/dest</text>
+<rect x="468" y="43" width="56" height="18" rx="4" fill="#F1EDE2" stroke="#C9C2B2"/><text x="476" y="56" font-size="9" fill="#333">Browse…</text>
+<text x="536" y="56" font-size="10" fill="#4B5764">Structure</text>
+<rect x="588" y="43" width="150" height="18" rx="4" fill="#fff" stroke="#C9C2B2"/><text x="594" y="56" font-size="8.5" fill="#444">Author \ Series \ Title</text>
+<rect x="748" y="44" width="90" height="20" rx="4" fill="#C2913A"/><text x="762" y="58" font-size="9" font-weight="600" fill="#1B2733">1. Scan</text>
+<rect x="844" y="44" width="104" height="20" rx="4" fill="#C2913A"/><text x="855" y="58" font-size="8.3" font-weight="600" fill="#1B2733">2. Copy Into New</text>
+<!-- bar 2: options -->
+<line x1="0" y1="70" x2="960" y2="70" stroke="#EFEBE1"/>
+<g font-size="9" fill="#333">
+<rect x="12" y="79" width="11" height="11" rx="2" fill="#fff" stroke="#C9C2B2"/><text x="27" y="88">Audiobooks</text>
+<rect x="98" y="79" width="11" height="11" rx="2" fill="#fff" stroke="#C9C2B2"/><text x="113" y="88">Ebooks</text>
+<rect x="170" y="79" width="11" height="11" rx="2" fill="#fff" stroke="#C9C2B2"/><text x="185" y="88">Online lookup during scan</text>
+<rect x="352" y="79" width="11" height="11" rx="2" fill="#C2913A"/><text x="367" y="88">Trust folder names over tags</text>
+<text x="556" y="88" fill="#4B5764">Last resort:</text>
+<rect x="616" y="79" width="11" height="11" rx="2" fill="#fff" stroke="#C9C2B2"/><text x="631" y="88">.opf</text>
+<rect x="660" y="79" width="11" height="11" rx="2" fill="#C2913A"/><text x="675" y="88">metadata.json</text>
+</g>
+<rect x="852" y="79" width="96" height="17" rx="4" fill="#D08B7E"/><text x="870" y="91" font-size="9" fill="#fff" font-weight="600">■ Stop</text>
+<!-- bar 3: filter/dup/export -->
+<line x1="0" y1="100" x2="960" y2="100" stroke="#EFEBE1"/>
+<rect x="12" y="108" width="200" height="18" rx="4" fill="#fff" stroke="#C9C2B2"/><text x="18" y="121" font-size="8.5" fill="#98A2AE">Filter by author / series / title…</text>
+<text x="222" y="121" font-size="9" fill="#4B5764">Show:</text>
+<rect x="250" y="108" width="110" height="18" rx="4" fill="#fff" stroke="#C9C2B2"/><text x="256" y="121" font-size="8.5" fill="#444">needs review</text>
+<text x="372" y="121" font-size="9" fill="#4B5764">Duplicates:</text>
+<rect x="428" y="108" width="150" height="18" rx="4" fill="#fff" stroke="#C9C2B2"/><text x="434" y="121" font-size="8.5" fill="#444">keep best format</text>
+<rect x="584" y="107" width="118" height="20" rx="4" fill="#C2913A"/><text x="594" y="121" font-size="8.5" font-weight="600" fill="#1B2733">Apply to duplicates</text>
+<rect x="860" y="107" width="88" height="20" rx="4" fill="#F1EDE2" stroke="#C9C2B2"/><text x="882" y="121" font-size="8.5" fill="#333">Export CSV</text>
+<!-- bulk bar -->
+<rect x="0" y="130" width="960" height="26" fill="#F6EFD9"/>
+<line x1="0" y1="130" x2="960" y2="130" stroke="#E4D6A8"/><line x1="0" y1="156" x2="960" y2="156" stroke="#E4D6A8"/>
+<text x="12" y="147" font-size="9" font-weight="600" fill="#333">3 checked:</text>
+<rect x="92" y="136" width="150" height="16" rx="3" fill="#fff" stroke="#C9C2B2"/><text x="98" y="147" font-size="8" fill="#98A2AE">Set author</text>
+<rect x="248" y="136" width="150" height="16" rx="3" fill="#fff" stroke="#C9C2B2"/><text x="254" y="147" font-size="8" fill="#98A2AE">Set series</text>
+<rect x="404" y="136" width="46" height="16" rx="3" fill="#fff" stroke="#C9C2B2"/><text x="410" y="147" font-size="8" fill="#98A2AE">#</text>
+<rect x="456" y="135" width="120" height="18" rx="3" fill="#C2913A"/><text x="466" y="147" font-size="8" font-weight="600" fill="#1B2733">Apply to checked</text>
+<rect x="582" y="135" width="90" height="18" rx="3" fill="#fff" stroke="#C9C2B2"/><text x="592" y="147" font-size="8" fill="#333">Skip checked</text>
+<!-- table -->
+<rect x="12" y="164" width="936" height="20" fill="#ECE8DE"/>
+<g font-size="8" font-weight="700" fill="#333">
+<text x="20" y="177">☐</text><text x="40" y="177">Type</text><text x="80" y="177">Author</text><text x="185" y="177">Series</text><text x="300" y="177">#</text><text x="325" y="177">Title</text><text x="470" y="177">Will be filed under</text><text x="760" y="177">Meta</text><text x="820" y="177">Status</text>
+</g>
+<g font-size="8" fill="#333">
+<rect x="12" y="184" width="936" height="18" fill="#D9F2D9"/>
+<text x="20" y="196">☑</text><text x="40" y="196">audio</text><text x="80" y="196">Brandon Sanderson</text><text x="185" y="196">Mistborn</text><text x="300" y="196">01</text><text x="325" y="196">The Final Empire</text><text x="470" y="196" font-family="Consolas,monospace" font-size="7.2" fill="#6B7684">Brandon Sanderson/Mistborn/The Final Empire</text><text x="760" y="196">opf</text><text x="820" y="196">copied</text>
+<rect x="12" y="202" width="936" height="18" fill="#FFE9C9"/>
+<text x="20" y="214">☐</text><text x="40" y="214">audio</text><text x="325" y="214">wise mans fear book2</text><text x="760" y="214">filename</text><text x="820" y="214">needs review</text>
+<rect x="12" y="220" width="936" height="18" fill="#EAD9F2"/>
+<text x="20" y="232">☑</text><text x="40" y="232">audio</text><text x="80" y="232">Andy Weir</text><text x="325" y="232">The Martian</text><text x="470" y="232" font-family="Consolas,monospace" font-size="7.2" fill="#6B7684">Andy Weir/The Martian</text><text x="760" y="232">tags</text><text x="820" y="232">ready (dup)</text>
+<rect x="12" y="238" width="936" height="18" fill="#fff"/>
+<text x="20" y="250">☐</text><text x="40" y="250">ebook</text><text x="80" y="250">Patrick Rothfuss</text><text x="185" y="250">Kingkiller Chronicle</text><text x="300" y="250">01</text><text x="325" y="250">The Name of the Wind</text><text x="470" y="250" font-family="Consolas,monospace" font-size="7.2" fill="#6B7684">Patrick Rothfuss/Kingkiller Chronicle/The Name…</text><text x="760" y="250">opf</text><text x="820" y="250">ready</text>
+<rect x="12" y="256" width="936" height="18" fill="#E9E9E9"/>
+<text x="20" y="268" fill="#8A93A0">☐</text><text x="40" y="268" fill="#8A93A0">audio</text><text x="80" y="268" fill="#8A93A0">Andy Weir</text><text x="325" y="268" fill="#8A93A0">The Martian (mp3 rip)</text><text x="760" y="268" fill="#8A93A0">tags</text><text x="820" y="268" fill="#8A93A0">skipped</text>
+<rect x="12" y="274" width="936" height="18" fill="#CCE4F7"/>
+<text x="20" y="286">☐</text><text x="40" y="286">audio</text><text x="80" y="286">Frank Herbert</text><text x="185" y="286">Dune</text><text x="300" y="286">01</text><text x="325" y="286">Dune</text><text x="470" y="286" font-family="Consolas,monospace" font-size="7.2" fill="#6B7684">Frank Herbert/Dune/Dune</text><text x="760" y="286">Audible</text><text x="820" y="286">ready</text>
+</g>
+<!-- pager -->
+<rect x="12" y="298" width="936" height="22" fill="#fff"/>
+<text x="18" y="313" font-size="8.5" fill="#333">← Prev</text>
+<text x="410" y="313" font-size="8.5" fill="#4B5764">Page 2 / 6 — 438 book(s) shown</text>
+<text x="800" y="313" font-size="8.5" fill="#333">Next →</text>
+<text x="862" y="313" font-size="8.5" fill="#4B5764">Rows/page:</text>
+<rect x="922" y="303" width="22" height="14" rx="2" fill="#fff" stroke="#C9C2B2"/>
+<!-- progress + log -->
+<rect x="12" y="326" width="936" height="8" rx="4" fill="#E3DECF"/><rect x="12" y="326" width="630" height="8" rx="4" fill="#C2913A"/>
+<rect x="12" y="342" width="936" height="202" rx="6" fill="#22313F"/>
+<g font-family="Consolas,monospace" font-size="8.5" fill="#C3CDD6">
+<text x="24" y="360">Library Organizer v1.10.3 starting…</text>
+<text x="24" y="374">Source mount /source: OK — 214 entries visible</text>
+<text x="24" y="388">Scanning /source …</text>
+<text x="24" y="402">Scan complete: 438 book(s) found. Review anything orange, then Copy.</text>
+<text x="24" y="416">Bulk edit applied to 3 book(s): author='Andy Weir'</text>
+<text x="24" y="430">Duplicate policy 'keep_best_format': 12 group(s) resolved, 12 book(s) skipped.</text>
+<text x="24" y="444">Copied: Brandon Sanderson/Mistborn/The Final Empire</text>
+<text x="24" y="458">  embedded tags written to 3 file(s)</text>
+<text x="24" y="472">Copied: Patrick Rothfuss/Kingkiller Chronicle/The Name of the Wind</text>
+<text x="24" y="486">Finished: 426/438 book(s) copied to /dest</text>
+</g>
+</svg>

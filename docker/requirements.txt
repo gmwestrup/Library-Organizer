@@ -1,0 +1,10 @@
+# Required
+flask>=2.2
+mutagen>=1.45
+waitress>=2.1
+# Strongly recommended (the app runs without them, with reduced features)
+pillow>=9.0        # cover conversion / resizing
+rapidfuzz>=3.0     # fast fuzzy matching for duplicates and author clustering (difflib fallback is slow on big libraries)
+pypdf>=3.0         # read the front pages of PDFs for ISBNs
+# Optional - speech-to-text of audiobook intros (large download, CPU is fine):
+#   pip install faster-whisper

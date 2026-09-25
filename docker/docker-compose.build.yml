@@ -1,0 +1,24 @@
+# ============================================================
+# LIBRARY ORGANIZER v2 - build the image locally (recommended)
+#   sudo docker-compose -f docker-compose.build.yml up -d --build
+# Includes ffmpeg. For speech-to-text of audiobook intros, add
+#   --build-arg WITH_WHISPER=1   to the build (see INSTALL.md).
+# EDIT THE THREE PATHS BELOW before running.
+# ============================================================
+services:
+  library-organizer:
+    build:
+      context: .
+      args:
+        WITH_WHISPER: "0"          # "1" = listen to audiobook intros (bigger image)
+    container_name: library-organizer
+    ports:
+      - "8765:8765"
+    volumes:
+      - /path/to/your/messy-library:/source:ro        # messy library (read-only)
+      - /path/to/your/clean-output:/dest              # clean output
+      - /path/to/library-organizer/config:/config     # decisions DB, covers, settings - back this up
+    environment:
+      - PORT=8765
+      # - ANTHROPIC_API_KEY=sk-ant-...   # optional; can also be entered in the web UI
+    restart: unless-stopped

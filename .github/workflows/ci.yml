@@ -1,0 +1,49 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.9", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install ffmpeg (real audio in the pipeline test)
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt pyyaml
+
+      - name: Byte-compile both editions
+        run: |
+          python -m py_compile docker/*.py windows/*.py windows/LibraryOrganizer.pyw
+
+      - name: Smoke test (edition parity + parser regressions)
+        run: python tests/test_smoke.py
+
+      - name: Real-world naming cases
+        run: python tests/test_realworld_names.py
+
+      - name: Full pipeline (scan, enrich, AI, duplicates, authors, copy, rescan)
+        run: python tests/test_pipeline.py
+
+      - name: Validate docker-compose files
+        run: |
+          python -c "
+          import yaml
+          for f in ['docker/docker-compose.yml', 'docker/docker-compose.host.yml', 'docker/docker-compose.build.yml', 'docker/portainer-stack.yml']:
+              d = yaml.safe_load(open(f))
+              assert 'services' in d and 'library-organizer' in d['services'], f
+              print(f, 'OK')
+          "
