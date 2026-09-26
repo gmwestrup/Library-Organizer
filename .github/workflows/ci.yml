@@ -38,6 +38,9 @@ jobs:
       - name: Full pipeline (scan, enrich, AI, duplicates, authors, copy, rescan)
         run: python tests/test_pipeline.py
 
+      - name: Move mode and "already in destination" handling
+        run: python tests/test_move.py
+
       - name: Validate docker-compose files
         run: |
           python -c "

@@ -30,6 +30,7 @@ import sys
 import json
 import queue
 import shutil
+import time
 import struct
 import zipfile
 import threading
@@ -1067,7 +1068,9 @@ def _normalize_stem(stem: str) -> str:
     """'Long.Shadows.[Unabridged].-.006' -> 'Long Shadows [Unabridged] - 006'."""
     if " " not in stem and stem.count(".") >= 2:
         stem = stem.replace(".", " ")
-    return re.sub(r"\s+", " ", stem).strip()
+    stem = re.sub(r"\s+", " ", stem).strip()
+    # "... (Unabridged) 32k": a bitrate / size / codec tag is not a part number
+    return strip_release_junk(stem) if re.search(r"(?i)\d\s*(?:k|kbps|mb|gb|khz)\b|\b(?:mp3|m4b|aac|vbr|cbr)\b", stem) else stem
 
 
 def book_prefix_key(stem: str):
@@ -1100,16 +1103,37 @@ def group_audio_files(paths, has_sidecar: bool):
             unnumbered.append(p)
         else:
             keyed.setdefault(k, []).append(p)
-    if not keyed:                       # nothing numbered: one book
+    def own_book(p, against):
+        """A loose file that is clearly a DIFFERENT complete book: a whole-book
+        format (m4b/m4a), or a name that states its own author AND title, where
+        that title isn't the group's. 'Bonus.mp3' / 'Epilogue.mp3' are not."""
+        stem = _normalize_stem(os.path.splitext(os.path.basename(p))[0])
+        if os.path.splitext(p)[1].lower() in (".m4b", ".m4a"):
+            return True
+        pn = parse_name(stem)
+        if not (pn.get("author") and pn.get("title")):
+            return False
+        want = re.sub(r"[^a-z0-9]+", " ", (against or "").lower()).strip()
+        have = re.sub(r"[^a-z0-9]+", " ", f"{pn['author']} {pn['title']}".lower()).strip()
+        return not (want and (want in have or have in want or similar(want, have) > 0.8))
+
+    if not keyed:
+        # nothing numbered: one book - unless the files are clearly separate books
+        # ("Author A - Book.m4b", "Author B - Other Book.mp3" loose in one folder)
+        if len(paths) > 1 and all(own_book(p, None) for p in paths):
+            return [(group_hint([p]), [p]) for p in sorted(paths)]
         return [(None, list(paths))]
-    # singleton mp3-type groups (a stray "Bonus.mp3") join the biggest group;
-    # whole-book formats (m4b/m4a) stay separate
     big = max(keyed, key=lambda k: len(keyed[k]))
+    # singleton mp3-type groups (a stray "Bonus 1.mp3") join the biggest group;
+    # whole-book formats and clearly separate books stay on their own
     for k in list(keyed):
-        if k != big and len(keyed[k]) == 1 and \
-                os.path.splitext(keyed[k][0])[1].lower() not in (".m4b", ".m4a"):
+        if k != big and len(keyed[k]) == 1 and not own_book(keyed[k][0], big):
             keyed[big] += keyed.pop(k)
-    keyed[big] += unnumbered
+    for p in unnumbered:
+        if own_book(p, big):
+            keyed[os.path.basename(p).lower()] = [p]
+        else:
+            keyed[big].append(p)
     out = []
     for k, files in sorted(keyed.items()):
         out.append((group_hint(files), files))
@@ -1664,57 +1688,275 @@ def rewrite_epub_metadata(path: str, book: Book, log=None) -> bool:
         return False
 
 
-def copy_book(book: Book, dest_root: str, log, write_opf: bool = False,
-              layout: str = "nested_series", rename_parts: bool = False,
-              folder_override: str = None, write_json: bool = False,
-              embed: bool = False, write_cover: bool = False,
-              embed_cover: bool = False, journal=None) -> str:
-    folder = folder_override or book.dest_folder(dest_root, layout)
-    copied_audio, copied_ebooks = [], []
-    os.makedirs(folder, exist_ok=True)
+class BookExists(Exception):
+    """The destination already has a different copy of this book and the
+    conflict policy said to leave it alone."""
+
+
+OS_JUNK = {"thumbs.db", "desktop.ini", ".ds_store", "@eadir", ".@__thumb", ".@__desc"}
+
+
+def _same_content(a: str, b: str) -> bool:
+    """Same size and same first/last 64 KB (the content fingerprint)."""
+    try:
+        if os.path.getsize(a) != os.path.getsize(b):
+            return False
+        import enrich
+        return enrich.file_fingerprint(a) == enrich.file_fingerprint(b)
+    except OSError:
+        return False
+
+
+def _same_drive(a: str, b: str) -> bool:
+    try:
+        return os.stat(a).st_dev == os.stat(b).st_dev
+    except OSError:
+        return False
+
+
+def _transfer(src, target, move, done_ops, delete_after):
+    """Copy, or move (rename on the same drive; copy+verify, delete later, across drives)."""
+    if move:
+        if _same_drive(src, os.path.dirname(target)):
+            os.rename(src, target)
+            done_ops.append(("rename", src, target))
+            return
+    shutil.copy2(src, target)
+    done_ops.append(("copy", src, target))
+    if os.path.getsize(target) != os.path.getsize(src):
+        raise IOError(f"verification failed - size mismatch after copying {os.path.basename(target)}")
+    if move:
+        delete_after.append(src)
+
+
+def _rollback(done_ops, log):
+    """Undo one book's partial transfer: renamed files go back, copies are removed."""
+    for method, src, target in reversed(done_ops):
+        try:
+            if method == "rename":
+                os.makedirs(os.path.dirname(src), exist_ok=True)
+                os.rename(target, src)
+            elif method == "copy" and os.path.exists(target):
+                os.remove(target)
+            elif method == "set-aside":            # a replaced destination file: put it back
+                os.makedirs(os.path.dirname(src), exist_ok=True)
+                os.rename(target, src)
+        except OSError as e:
+            log(f"  ROLLBACK PROBLEM: could not restore {src}: {e}")
+    if done_ops:
+        log(f"  rolled back {len(done_ops)} file operation(s) - the source is as it was")
+
+
+def _plan_names(book, rename_parts, cover_src, move):
+    """[(src, target_name, is_primary)] - the file names this book will get."""
+    image_extras = {e for e in book.extras if os.path.splitext(e)[1].lower() in (".jpg", ".jpeg", ".png")}
     single_audio = book.kind == "audio" and len(book.files) == 1
     single_ebook = book.kind == "ebook"
     part_no = {src: i for i, src in enumerate(book.files, 1)}   # files are in playback order
-    used_names = set()
     spans_discs = len({os.path.dirname(f) for f in book.files}) > 1
-    cover_src = getattr(book, "cover", "") if write_cover else ""
-    image_extras = {e for e in book.extras if os.path.splitext(e)[1].lower() in (".jpg", ".jpeg", ".png")}
+    used, out = set(), []
     for src in book.files + book.extras:
         ext = os.path.splitext(src)[1].lower()
-        if cover_src and src in image_extras and \
-                re.match(r"(?i)^(cover|folder|front)\.", os.path.basename(src)):
-            continue          # replaced by the chosen cover.jpg below
-        if (single_audio or single_ebook) and ext in AUDIO_EXTS | EBOOK_EXTS:
+        is_cover_file = cover_src and src in image_extras and \
+            re.match(r"(?i)^(cover|folder|front)\.", os.path.basename(src))
+        if is_cover_file and not move:
+            continue          # replaced by the chosen cover.jpg
+        if is_cover_file:
+            name = "original-" + os.path.basename(src)      # moving: keep it, renamed
+        elif (single_audio or single_ebook) and ext in AUDIO_EXTS | EBOOK_EXTS:
             name = sanitize(book.title) + ext
         elif rename_parts and src in part_no and ext in AUDIO_EXTS:
-            # "Title - 01.mp3", numbered in playback order (disc 1 first, ...)
             name = f"{sanitize(book.title)} - {part_no[src]:02d}{ext}"
         else:
             name = os.path.basename(src)  # keep original part names
             if spans_discs and ext in AUDIO_EXTS:
-                # parts from several disc folders: prefix ALL of them with the
-                # disc folder so "Disc 1 - 01.mp3" sorts before "Disc 2 - 01.mp3"
+                # parts from several disc folders: prefix ALL of them with the disc folder
                 name = f"{sanitize(os.path.basename(os.path.dirname(src)))} - {name}"
-            if name.lower() in used_names:
+            if name.lower() in used:
                 stem, e = os.path.splitext(name)
                 name = f"{stem} ({part_no.get(src, 0)}){e}"
-        used_names.add(name.lower())
-        target = os.path.join(folder, name)
-        if os.path.exists(target):
-            if os.path.getsize(target) == os.path.getsize(src):
-                log(f"  skipped (already exists): {name}")
-                continue
-            stem, e = os.path.splitext(name)
-            target = os.path.join(folder, f"{stem} (copy){e}")
-        shutil.copy2(src, target)
-        if os.path.getsize(target) != os.path.getsize(src):
-            raise IOError(f"verification failed - size mismatch after copying {name}")
-        if journal:
-            journal("copy", src, target)
-        if src in part_no and ext in AUDIO_EXTS:
-            copied_audio.append(target)
-        elif ext == ".epub" and src in book.files:
-            copied_ebooks.append(target)
+        used.add(name.lower())
+        out.append((src, name, src in part_no))
+    return out
+
+
+def _quality(paths) -> tuple:
+    """Rough 'which copy is better': total size, then bitrate of the first file."""
+    size, br = 0, 0
+    for p in paths:
+        try:
+            size += os.path.getsize(p)
+        except OSError:
+            pass
+    if paths and HAVE_MUTAGEN:
+        try:
+            f = mutagen.File(paths[0])
+            br = int(getattr(getattr(f, "info", None), "bitrate", 0) or 0)
+        except Exception:
+            pass
+    return (br, size)
+
+
+def _free_folder(base: str) -> str:
+    cand, k = base, 2
+    while os.path.exists(cand):
+        cand, k = f"{base} ({k})", k + 1
+    return cand
+
+
+def copy_book(book: Book, dest_root: str, log, write_opf: bool = False,
+              layout: str = "nested_series", rename_parts: bool = False,
+              folder_override: str = None, write_json: bool = False,
+              embed: bool = False, write_cover: bool = False,
+              embed_cover: bool = False, journal=None, move: bool = False,
+              source_root: str = "", dir_in_use=None, conflict: str = "skip") -> str:
+    """Copy (default) or MOVE one book into the clean structure.
+
+    conflict - what to do when the destination already holds a DIFFERENT
+    copy of this book's audio/ebook files:
+      skip         leave this book where it is (raises BookExists)
+      keep_better  keep whichever copy is better; if the destination wins,
+                   leave this one where it is (raises BookExists)
+      replace      set the old destination files aside in
+                   <dest>/.replaced/<date>/... and put this copy in place
+      keep_both    put this copy in a numbered folder, "Title (2)"
+    Files that are IDENTICAL to what's already there never count as a
+    conflict: a copy skips them, a move just removes the source file.
+
+    Move is all-or-nothing per book: same drive = rename (instant, no extra
+    space); other drive = copy, verify, delete afterwards. On any failure,
+    everything already done for this book is undone. Leftover sidecars in a
+    source folder no other book uses follow the book; emptied source folders
+    are removed. Nothing but OS junk (Thumbs.db, desktop.ini) is deleted."""
+    folder = folder_override or book.dest_folder(dest_root, layout)
+    cover_src = getattr(book, "cover", "") if write_cover else ""
+    plan = _plan_names(book, rename_parts, cover_src, move)
+
+    # ---- does the destination already hold a DIFFERENT copy of this book? ----
+    clashes = [(src, os.path.join(folder, name)) for src, name, primary in plan
+               if primary and os.path.exists(os.path.join(folder, name))
+               and not _same_content(src, os.path.join(folder, name))]
+    if clashes:
+        where = os.path.relpath(folder, dest_root)
+        if conflict == "keep_both":
+            folder = _free_folder(folder)
+            log(f"  already in destination - keeping both: {os.path.relpath(folder, dest_root)}")
+        elif conflict == "replace":
+            pass                                   # set aside below, inside the rollback scope
+        elif conflict == "keep_better":
+            existing = [t for _, t in clashes]
+            mine = [s for s, _ in clashes]
+            if _quality(mine) <= _quality(existing):
+                raise BookExists(f"destination already has an equal or better copy ({where})")
+            log(f"  this copy is better than the one in {where} - replacing it")
+            conflict = "replace"
+        else:
+            raise BookExists(f"a different copy is already at {where}")
+
+    done_ops, delete_after = [], []
+    copied_audio, copied_ebooks = [], []
+    os.makedirs(folder, exist_ok=True)
+    try:
+        if clashes and conflict == "replace":
+            stamp = time.strftime("%Y-%m-%d_%H%M%S")
+            for _, t in clashes:
+                aside = os.path.join(dest_root, ".replaced", stamp, os.path.relpath(t, dest_root))
+                os.makedirs(os.path.dirname(aside), exist_ok=True)
+                os.rename(t, aside)
+                done_ops.append(("set-aside", t, aside))
+                if journal:
+                    journal("replaced", t, aside)
+        for src, name, primary in plan:
+            ext = os.path.splitext(src)[1].lower()
+            target = os.path.join(folder, name)
+            if os.path.exists(target):
+                if _same_content(src, target):
+                    log(f"  already there (identical): {name}")
+                    if move:
+                        delete_after.append(src)      # safely at the destination already
+                    continue
+                stem, e = os.path.splitext(name)      # a differing extra (nfo, image...)
+                target = os.path.join(folder, f"{stem} (copy){e}")
+            _transfer(src, target, move, done_ops, delete_after)
+            if journal:
+                journal("move" if move else "copy", src, target)
+            if primary and ext in AUDIO_EXTS:
+                copied_audio.append(target)
+            elif ext == ".epub" and src in book.files:
+                copied_ebooks.append(target)
+    except Exception:
+        _rollback(done_ops, log)
+        raise
+    if move:
+        for src in delete_after:
+            try:
+                os.remove(src)
+            except OSError as e:
+                log(f"  moved, but could not delete the original {os.path.basename(src)}: {e}")
+        _tidy_source_dirs(book, folder, source_root, dir_in_use, journal, log)
+    return _finish_copy(book, folder, copied_audio, copied_ebooks, cover_src, write_opf,
+                        write_json, embed, embed_cover, log)
+
+
+SIDECAR_EXTS = {".jpg", ".jpeg", ".png", ".webp", ".gif", ".nfo", ".txt", ".opf", ".json",
+                ".cue", ".pdf", ".m3u", ".m3u8", ".sfv", ".md5", ".log", ".url"}
+
+
+def _tidy_source_dirs(book, folder, source_root, dir_in_use, journal, log):
+    """After a move: sidecars left in a folder that no other book uses follow
+    the book; then empty folders are removed, up to (never including) the
+    source root."""
+    if not source_root:
+        return
+    root = os.path.normpath(source_root)
+    dirs = sorted({os.path.dirname(f) for f in book.files}, key=len, reverse=True)
+    for d in dirs:
+        if dir_in_use and dir_in_use(d):
+            continue                      # other books still live here
+        try:
+            names = os.listdir(d)
+        except OSError:
+            continue
+        rest = [n for n in names if n.lower() not in OS_JUNK]
+        if rest and all(os.path.isfile(os.path.join(d, n)) and
+                        os.path.splitext(n)[1].lower() in SIDECAR_EXTS for n in rest):
+            for n in rest:
+                src = os.path.join(d, n)
+                target = os.path.join(folder, n)
+                if os.path.exists(target):
+                    if _same_content(src, target):
+                        os.remove(src)
+                        continue
+                    target = os.path.join(folder, "original-" + n)
+                    if os.path.exists(target):
+                        continue          # leave it; never overwrite
+                try:
+                    shutil.move(src, target)
+                    if journal:
+                        journal("move", src, target)
+                except OSError as e:
+                    log(f"  could not move leftover {n}: {e}")
+        # remove the folder (and emptied parents) if nothing but OS junk is left
+        cur = os.path.normpath(d)
+        while cur != root and cur.startswith(root + os.sep):
+            try:
+                left = os.listdir(cur)
+            except OSError:
+                break
+            if any(n.lower() not in OS_JUNK for n in left):
+                break
+            try:
+                for n in left:
+                    p = os.path.join(cur, n)
+                    shutil.rmtree(p) if os.path.isdir(p) else os.remove(p)
+                os.rmdir(cur)
+            except OSError:
+                break
+            cur = os.path.dirname(cur)
+
+
+def _finish_copy(book, folder, copied_audio, copied_ebooks, cover_src, write_opf,
+                 write_json, embed, embed_cover, log):
     # ---- The chosen cover -> cover.jpg (+ embedded) ----
     cover_name = ""
     if cover_src and os.path.isfile(cover_src):

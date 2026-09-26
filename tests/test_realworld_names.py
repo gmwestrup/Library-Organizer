@@ -98,6 +98,29 @@ for raw, want in [("Weir, Andy", "Andy Weir"), ("Le Guin, Ursula K.", "Ursula K.
     got = core.clean_author(raw)
     check(f"clean_author({raw!r}) == {want!r}", got == want, got)
 
+print("\n== Loose files in one folder: which belong together? ==")
+G = core.group_audio_files
+def groups(names):
+    return sorted(sorted(os.path.basename(f) for f in g[1]) for g in G([f"/x/{n}" for n in names], False))
+cases = [
+    # two different books loose in one folder must NOT be merged (found on a real run:
+    # the "32k" bitrate was read as a part number and the other book was attached to it)
+    (["Andy Weir - Project Hail Mary (Unabridged) 32k.mp3", "Dennis E Taylor - For We Are Many.m4b"],
+     [["Andy Weir - Project Hail Mary (Unabridged) 32k.mp3"], ["Dennis E Taylor - For We Are Many.m4b"]]),
+    (["Andy Weir - The Martian.mp3", "Blake Crouch - Dark Matter.mp3"],
+     [["Andy Weir - The Martian.mp3"], ["Blake Crouch - Dark Matter.mp3"]]),
+    # ...while real parts, extras and bonus tracks still stay with their book
+    (["Dawn Girl - 01 - Opening Credits.mp3", "Dawn Girl - 02 - Chapter 1.mp3", "Bonus.mp3"],
+     [["Bonus.mp3", "Dawn Girl - 01 - Opening Credits.mp3", "Dawn Girl - 02 - Chapter 1.mp3"]]),
+    (["Title - Part 1.mp3", "Title - Part 2.mp3", "Author - Title.mp3"],
+     [["Author - Title.mp3", "Title - Part 1.mp3", "Title - Part 2.mp3"]]),
+    (["Book 64k - 01.mp3", "Book 64k - 02.mp3"], [["Book 64k - 01.mp3", "Book 64k - 02.mp3"]]),
+    (["Intro.mp3", "Chapter One.mp3"], [["Chapter One.mp3", "Intro.mp3"]]),
+]
+for names, want in cases:
+    got = groups(names)
+    check(f"{len(names)} loose files -> {len(want)} book(s): {names[0][:40]}...", got == sorted(want), got)
+
 if failures:
     print(f"\n{len(failures)} case(s) FAILED")
     sys.exit(1)

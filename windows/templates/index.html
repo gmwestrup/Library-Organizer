@@ -132,6 +132,16 @@ td.thumb .none{width:32px;height:32px;border:1px dashed #C9C2B2;border-radius:3p
     <label title="Autopilot: resolve every duplicate group with the recommended keeper"><input type="checkbox" id="autoDupes" checked> Autopilot resolves duplicates</label>
   </div>
   <div class="grid">
+    <label title="What to do when the destination already has a DIFFERENT copy of a book (identical files are never a problem)">If a book is already in the destination
+      <select id="conflict">
+        <option value="skip">skip it - leave this copy where it is</option>
+        <option value="keep_better">keep the better copy</option>
+        <option value="replace">replace it (old files set aside in .replaced)</option>
+        <option value="keep_both">keep both - numbered folder</option>
+      </select></label>
+    <label title="Copy or move only the rows you ticked in the Books table"><input type="checkbox" id="onlyChecked"> Only the checked rows</label>
+  </div>
+  <div class="grid">
     <label><input type="checkbox" id="writeOpf" checked> Write metadata.opf</label>
     <label><input type="checkbox" id="writeJson" checked> Write metadata.json</label>
     <label title="Write the reviewed metadata into the COPIED audio files and epubs (originals never touched)"><input type="checkbox" id="embedTags" checked> Fix embedded tags in copies</label>
@@ -154,6 +164,10 @@ td.thumb .none{width:32px;height:32px;border:1px dashed #C9C2B2;border-radius:3p
     <button class="primary step" id="btnAi" title="Ask the AI about books below the confidence threshold">3 AI identify</button><span class="arrow">&rsaquo;</span>
     <button class="primary step" id="btnTabDupes" title="Duplicates and author variants">4 Clean up</button><span class="arrow">&rsaquo;</span>
     <button class="primary step" id="btnCopy">5 Copy</button>
+    <select id="xferMode" title="Copy leaves the source untouched. Move takes APPROVED books out of the source, so what's left there is what still needs work.">
+      <option value="copy">copy (keep source)</option>
+      <option value="move">move approved books</option>
+    </select>
     <button id="btnStop" style="display:none;background:#D08B7E;border-color:#C07668;color:#fff">&#9632; Stop</button>
   </div>
   <span class="counts" id="counts"></span>
@@ -187,8 +201,10 @@ td.thumb .none{width:32px;height:32px;border:1px dashed #C9C2B2;border-radius:3p
           <option value="dups">possible duplicates</option>
           <option value="damaged">damaged / unreadable</option>
           <option value="nocover">no cover</option>
-          <option value="pending">not yet copied</option>
-          <option value="copied">copied</option>
+          <option value="approved">approved (will be moved)</option>
+          <option value="exists">already in destination</option>
+          <option value="pending">not yet copied / moved</option>
+          <option value="copied">copied / moved</option>
           <option value="skipped">skipped</option>
         </select>
       </label>
@@ -203,6 +219,7 @@ td.thumb .none{width:32px;height:32px;border:1px dashed #C9C2B2;border-radius:3p
       <input type="text" id="bulkIdx" placeholder="#" style="min-width:60px;width:60px">
       <input type="text" id="bulkNarr" placeholder="Set narrator" style="min-width:150px">
       <button class="primary" id="btnBulk">Apply to checked</button>
+      <button id="btnApproveChecked" title="Confirm these are right: they'll be included in a Move, and the values are remembered">Approve</button>
       <button id="btnEnrichChecked">Enrich checked</button>
       <button id="btnAiChecked">AI checked</button>
       <button id="btnSkipChecked">Skip</button>
@@ -338,7 +355,8 @@ async function api(url,opts){
 }
 function confBadge(c){const cls=c>=80?"c-hi":c>=50?"c-mid":"c-lo"; return `<span class="conf ${cls}">${c}</span>`;}
 function rowClass(b){
-  if(b.status==="copied") return "copied"; if(b.status==="skipped") return "skipped";
+  if(b.status==="copied"||b.status==="moved") return "copied"; if(b.status==="skipped") return "skipped";
+  if(b.status==="in destination") return "online";
   if(b.status.startsWith("ERROR")) return "error"; if(!b.author||!b.title) return "review";
   if(b.dup) return "dup"; if(/^(Audible|Google|Open Library|online)/.test(b.meta)) return "online"; return "";
 }
@@ -373,11 +391,12 @@ async function loadBooks(){
       `<td contenteditable data-f="title">${esc(b.title)}</td>`+
       `<td contenteditable data-f="narrator">${esc(b.narrator)}</td>`+
       `<td style="white-space:nowrap">${esc(b.length)}</td>`+
-      `<td>${confBadge(b.conf)}${flags}</td>`+
+      `<td>${confBadge(b.conf)}${b.approved?'<span class="flag f-lock" title="approved by you">&#10003;</span>':""}${flags}</td>`+
       `<td class="dest">${esc(b.dest)}</td>`+
       `<td class="dest">${esc(b.src)} (${b.files} file${b.files>1?"s":""})</td>`+
       `<td>${esc(b.meta)}</td><td class="st">${esc(b.status)}</td>`+
       `<td style="white-space:nowrap"><button class="rowbtn info" title="Details, covers, AI">&#9432;</button>`+
+      `<button class="rowbtn approve" title="Approve: this is right (included in a Move)">&#10003;</button>`+
       `<button class="rowbtn skipbtn" title="Skip / un-skip">&#8856;</button>`+
       `<button class="rowbtn del" title="Remove from plan">&#10005;</button></td>`;
     tb.appendChild(tr);
@@ -394,6 +413,7 @@ document.addEventListener("focusout",async e=>{
 document.addEventListener("click",async e=>{
   const t=e.target, tr=t.closest("tr");
   if(t.classList.contains("info")) return openDrawer(+tr.dataset.id);
+  if(t.classList.contains("approve")){await api("/api/bulk",J({ids:[+tr.dataset.id],action:"approve"}));loadBooks();return;}
   if(t.classList.contains("skipbtn")){const b=await api(`/api/book/${tr.dataset.id}/skip`,{method:"POST"});tr.className=rowClass(b);tr.querySelector("td.st").textContent=b.status;return;}
   if(t.classList.contains("del")){await api(`/api/book/${tr.dataset.id}`,{method:"DELETE"});selected.delete(+tr.dataset.id);tr.remove();updateBulk();}
 });
@@ -416,6 +436,7 @@ $("btnBulk").onclick=async()=>{
   await api("/api/bulk",J({ids:[...selected],fields:f}));
   ["bulkAuthor","bulkSeries","bulkIdx","bulkNarr"].forEach(i=>$(i).value=""); selected.clear(); loadBooks();
 };
+$("btnApproveChecked").onclick=async()=>{const r=await api("/api/bulk",J({ids:[...selected],action:"approve"}));selected.clear();loadBooks();};
 $("btnSkipChecked").onclick=async()=>{await api("/api/bulk",J({ids:[...selected],action:"skip"}));selected.clear();loadBooks();};
 $("btnUnskipChecked").onclick=async()=>{await api("/api/bulk",J({ids:[...selected],action:"unskip"}));selected.clear();loadBooks();};
 $("btnEnrichChecked").onclick=async()=>{await api("/api/enrich",J({ids:[...selected],...enrichOpts()}));selected.clear();};
@@ -442,7 +463,7 @@ async function openDrawer(id){
   const ai=d.ai&&d.ai.title?`<div class="aibox"><b>AI (${d.ai.confidence}%):</b> ${esc(d.ai.author)} &mdash; <i>${esc(d.ai.title)}</i>`+
     (d.ai.series?` &middot; ${esc(d.ai.series)} ${esc(d.ai.series_index||"")}`:"")+(d.ai.narrator?` &middot; read by ${esc(d.ai.narrator)}`:"")+
     `<div class="muted">${esc(d.ai.reason||"")}</div>`+(d.ai.pending?`<button class="primary small" id="aiAccept" style="margin-top:6px">Accept AI suggestion</button>`:`<div class="muted">applied</div>`)+`</div>`:"";
-  const ob=d.online_best&&d.online_best.title?`<div class="kv" style="margin:6px 0"><div>Best online</div><div>${esc(d.online_best.source)} (${d.online_best.score}): ${esc(d.online_best.author)} &mdash; ${esc(d.online_best.title)}${d.online_best.runtime?" &middot; "+Math.round(d.online_best.runtime/360)/10+" h":""}</div></div>`:"";
+  const ob=d.online_best&&d.online_best.title?`<div class="kv" style="margin:6px 0"><div>Best online</div><div>${esc(d.online_best.source)} (${Math.round(Math.min(d.online_best.score,1)*100)}% match): ${esc(d.online_best.author)} &mdash; ${esc(d.online_best.title)}${d.online_best.runtime?" &middot; "+Math.round(d.online_best.runtime/360)/10+" h":""}</div></div>`:"";
   const covers=(d.cover_candidates||[]).map(c=>`<figure data-idx="${c.idx}" class="${d.cover_info&&d.cover_info.startsWith(c.w+"x"+c.h+" "+c.origin)?"on":""}"><img loading="lazy" src="/api/book/${id}/cover.img?c=${c.idx}"><figcaption>${c.w}&times;${c.h}<br>${esc(c.origin)}</figcaption></figure>`).join("");
   dr.innerHTML=`<div style="display:flex;justify-content:space-between;align-items:start;gap:10px">
       <div><h2>${esc(d.title)}</h2><div class="muted">${esc(d.author)} &middot; ${d.kind} &middot; ${confBadge(d.conf)} &middot; from ${esc(d.meta)}</div></div>
@@ -566,9 +587,19 @@ $("btnAuto").onclick=async()=>{
   if(lastCounts.total&&!confirm("Autopilot rescans the source and rebuilds the plan. Your earlier edits, author merges and duplicate decisions are remembered and re-applied. Continue?")) return;
   selected.clear(); await api("/api/autopilot",J({...scanOpts(),...enrichOpts(),use_ai:$("useAi").checked,resolve_dupes:$("autoDupes").checked}));
 };
+function syncMode(){const mv=$("xferMode").value==="move"; $("btnCopy").textContent=mv?"5 Move":"5 Copy"; store.set("lo_mode",$("xferMode").value);}
+$("xferMode").onchange=syncMode; if(store.get("lo_mode")) $("xferMode").value=store.get("lo_mode"); syncMode();
+$("conflict").onchange=()=>store.set("lo_conflict",$("conflict").value); if(store.get("lo_conflict")) $("conflict").value=store.get("lo_conflict");
 $("btnStop").onclick=async()=>{await api("/api/cancel",{method:"POST"});};
 $("btnCopy").onclick=async()=>{
-  let msg="Copy all not-yet-copied books into "+$("dest").value+"?\n\nOriginals are never modified. Skipped books are left out.";
+  const mv=$("xferMode").value==="move", only=$("onlyChecked").checked;
+  if(only&&!selected.size){alert("Tick some rows in the Books table first, or untick 'Only the checked rows'.");return;}
+  const which=only?(selected.size+" checked book(s)"):"all books not yet copied/moved";
+  let msg=mv?("MOVE "+which+" into "+$("dest").value+"?\n\nOnly APPROVED books move (confidence at or above your threshold, or approved with the \u2713 button). "+
+              "Everything else stays in the source, so what's left there is what still needs work.\n\nOn the same drive a move is an instant rename; "+
+              "if anything fails for a book, its files are put back.")
+            :("Copy "+which+" into "+$("dest").value+"?\n\nOriginals are never modified. Skipped books are left out.");
+  msg+="\n\nIf a book is already in the destination: "+$("conflict").selectedOptions[0].text+".";
   if(lastCounts.dups) msg+="\n\n"+lastCounts.dups+" book(s) are still in unresolved duplicate groups (Duplicates tab).";
   if(lastCounts.low) msg+="\n"+lastCounts.low+" book(s) are below the confidence threshold ('low confidence' filter).";
   if(!confirm(msg)) return;
@@ -576,6 +607,7 @@ $("btnCopy").onclick=async()=>{
     rename_parts:$("renameParts").checked,dup_policy:$("dupPolicy").value,write_json:$("writeJson").checked,
     embed:$("embedTags").checked,number_folders:$("numberFolders").checked,write_cover:$("writeCover").checked,
     embed_cover:$("embedCover").checked,min_conf:+$("minConf").value,
+    mode:$("xferMode").value,conflict:$("conflict").value,ids:only?[...selected]:null,
     hold_damaged:$("holdDamaged").checked,hold_review:$("holdReview").checked};
   const r=await fetch("/api/copy",J(body));
   if(r.status===507){const j=await r.json(); if(confirm(j.error+"\n\nCopy anyway?")){body.force=true;await api("/api/copy",J(body));}}
@@ -613,12 +645,13 @@ async function poll(){
   try{
     const s=await api(`/api/state?log_since=${logNext}`); logNext=s.log_next;
     if(s.log.length){const el=$("log");el.textContent+=s.log.join("\n")+"\n";el.scrollTop=el.scrollHeight;}
-    const [c,t]=s.progress; $("progressBar").style.width=(t?100*c/t:(s.busy?30:0))+"%";
+    const [c,t]=s.progress; $("progressBar").style.width=(s.busy?(t?100*c/t:30):0)+"%";
     lastCounts=s.counts; const k=s.counts;
     const pill=(n,color,label,f)=>n?`<span data-f="${f}"><i class="dot" style="background:${color}"></i>${n} ${label}</span>`:"";
     $("counts").innerHTML=`<span data-f=""><b>${k.total}</b> books</span>`+pill(k.low,"#F2C9C4","low confidence","low")+
       pill(k.review,"var(--warn)","review","review")+pill(k.ai,"#DCE3F6","AI to review","ai")+pill(k.dups,"var(--dupc)","in dup groups","dups")+
-      pill(k.damaged,"var(--bad)","damaged?","damaged")+pill(k.copied,"var(--good)","copied","copied")+pill(k.skipped,"#E9E9E9","skipped","skipped")+
+      pill(k.damaged,"var(--bad)","damaged?","damaged")+pill(k.copied,"var(--good)","copied","copied")+pill(k.moved,"var(--good)","moved","copied")+
+      pill(k.exists,"var(--info)","already in destination","exists")+pill(k.skipped,"#E9E9E9","skipped","skipped")+
       pill(k.error,"var(--bad)","errors","");
     $("tDupes").textContent=k.dups?`(${k.dups})`:"";
     if(s.busy&&t>0&&c>3&&s.elapsed>5){const rem=(s.elapsed/c)*(t-c),m=Math.floor(rem/60);

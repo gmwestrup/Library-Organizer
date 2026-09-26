@@ -34,7 +34,7 @@ import dedupe
 import authors as authors_mod
 from library_db import DecisionsDB
 
-VERSION = "2.0.1"
+VERSION = "2.1.0"
 
 app = Flask(__name__)
 
@@ -69,6 +69,7 @@ BOOK_FIELDS = ("kind", "author", "series", "series_index", "title", "src_display
                "description", "genres", "language", "asin", "isbn", "duration", "bitrate", "codec",
                "chapters", "health", "cover", "cover_info", "cover_candidates", "confidence",
                "match_bonus", "online_best", "ai", "transcript", "locked", "enriched", "dup_skipped", "flags")
+DONE = ("copied", "moved")       # finished books: never re-processed
 EDITABLE = ("author", "series", "series_index", "title", "narrator", "year", "publisher",
             "description", "genres", "language", "asin", "isbn")
 
@@ -207,7 +208,7 @@ def cancelled():
 
 
 def refresh_status(b):
-    if b.status in ("copied", "skipped") or b.status.startswith("ERROR"):
+    if b.status in ("copied", "moved", "skipped") or b.status.startswith("ERROR"):
         return
     b.status = "ready" if (b.author and b.title) else "needs review"
 
@@ -224,7 +225,7 @@ def apply_memory(b):
     if corr:
         for k, v in corr.items():
             if k == "_status":
-                if v == "skipped" and b.status != "copied":
+                if v == "skipped" and b.status not in DONE:
                     b.status = "skipped"
                 continue
             if k == "cover":
@@ -263,7 +264,7 @@ def library_pass():
     from library_db import author_key
     junk = swapped = 0
     with STATE["lock"]:
-        books = [b for b in STATE["books"].values() if b.status != "copied"]
+        books = [b for b in STATE["books"].values() if b.status not in DONE]
         for b in books:
             if b.author and author_key(b.author) in JUNK_AUTHORS and "author" not in b.locked:
                 b.author = ""
@@ -282,7 +283,7 @@ def library_pass():
                 keeper.files += [f for f in b.files if os.path.splitext(f)[1].lower() not in have]
                 STATE["books"].pop(bid)
                 merged += 1
-        books = [b for b in STATE["books"].values() if b.status != "copied"]
+        books = [b for b in STATE["books"].values() if b.status not in DONE]
         if merged:
             log(f"  {merged} remembered ebook format merge(s) re-applied")
         known = {author_key(b.author) for b in books
@@ -311,7 +312,7 @@ def narrator_pass():
     from library_db import author_key
     n = 0
     with STATE["lock"]:
-        books = [b for b in STATE["books"].values() if b.status != "copied"]
+        books = [b for b in STATE["books"].values() if b.status not in DONE]
         narrators = {author_key(x) for b in books for x in (b.narrator or "").split(",") if x.strip()}
         by_author = {}
         for b in books:
@@ -340,7 +341,7 @@ def narrator_pass():
 def dup_groups():
     with STATE["lock"]:
         if STATE["dupes_ver"] != STATE["ver"] or STATE["dupes"] is None:
-            books = {i: b for i, b in STATE["books"].items() if b.status != "copied"}
+            books = {i: b for i, b in STATE["books"].items() if b.status not in DONE}
             STATE["dupes"] = dedupe.find_groups(books, DB.dismissed_dupes())
             STATE["dupes_ver"] = STATE["ver"]
         return STATE["dupes"]
@@ -363,6 +364,7 @@ def book_json(bid, b, layout="nested_series", dups=None):
         "length": enrich.fmt_duration(b.duration), "cover": bool(b.cover),
         "health": b.health, "ai": bool(b.ai and b.ai.get("pending")), "flags": b.flags,
         "dup": bool(dups and bid in dups), "locked": b.locked,
+        "approved": {"title", "author"} <= set(b.locked),
         "dest": b.dest_folder("", layout).lstrip(os.sep) if (b.author or b.title) else "",
     }
 
@@ -379,20 +381,22 @@ def api_state():
     thr = settings()["threshold"]
     dups = dup_ids() if not STATE["busy"] else {i for g in (STATE["dupes"] or []) for i in g["ids"]}
     with STATE["lock"]:
-        c = {"total": len(STATE["books"]), "ready": 0, "review": 0, "copied": 0, "error": 0,
+        c = {"total": len(STATE["books"]), "ready": 0, "review": 0, "copied": 0, "moved": 0, "exists": 0, "error": 0,
              "skipped": 0, "low": 0, "damaged": 0, "ai": 0}
         for b in STATE["books"].values():
-            if b.status == "copied":
-                c["copied"] += 1
+            if b.status in DONE:
+                c["moved" if b.status == "moved" else "copied"] += 1
             elif b.status == "skipped":
                 c["skipped"] += 1
+            elif b.status == "in destination":
+                c["exists"] += 1
             elif b.status.startswith("ERROR"):
                 c["error"] += 1
             elif not b.author or not b.title:
                 c["review"] += 1
             else:
                 c["ready"] += 1
-            if b.status not in ("copied", "skipped"):
+            if b.status not in ("copied", "moved", "skipped"):
                 c["low"] += b.confidence < thr
                 c["damaged"] += bool(b.health)
                 c["ai"] += bool(b.ai and b.ai.get("pending"))
@@ -405,21 +409,25 @@ def api_state():
 def _filter(bid, b, status, q, dups, thr):
     if status == "review" and (b.author and b.title):
         return False
-    if status == "copied" and b.status != "copied":
+    if status == "copied" and b.status not in DONE:
         return False
-    if status == "pending" and b.status in ("copied", "skipped"):
+    if status == "pending" and b.status in ("copied", "moved", "skipped"):
         return False
     if status == "skipped" and b.status != "skipped":
         return False
     if status == "dups" and bid not in dups:
         return False
-    if status == "low" and (b.confidence >= thr or b.status in ("copied", "skipped")):
+    if status == "low" and (b.confidence >= thr or b.status in ("copied", "moved", "skipped")):
         return False
     if status == "damaged" and not b.health:
         return False
     if status == "ai" and not (b.ai and b.ai.get("pending")):
         return False
     if status == "nocover" and b.cover:
+        return False
+    if status == "exists" and b.status != "in destination":
+        return False
+    if status == "approved" and not ({"title", "author"} <= set(b.locked) or b.confidence >= thr):
         return False
     if q and q not in f"{b.author} {b.series} {b.title} {b.narrator} {b.src_display}".lower():
         return False
@@ -510,7 +518,7 @@ def api_skip(bid):
             b.status = ""
             refresh_status(b)
             DB.save_correction(b.fingerprint, {"_status": ""})
-        elif b.status != "copied":
+        elif b.status not in DONE:
             b.status = "skipped"
             DB.save_correction(b.fingerprint, {"_status": "skipped"})
         touch()
@@ -597,12 +605,25 @@ def api_bulk():
     data = request.get_json(force=True)
     ids = data.get("ids") or []
     action = data.get("action", "")
+    if ids and action == "approve":
+        n = 0
+        with STATE["lock"]:
+            for bid in ids:
+                b = STATE["books"].get(bid)
+                if not b or b.status in DONE or not (b.author and b.title):
+                    continue
+                remember(b, {k: getattr(b, k) for k in ("title", "author", "series", "series_index")})
+                b.confidence = enrich.confidence(b)
+                n += 1
+            touch()
+        log(f"Approved {n} book(s) - they will be included in a Move.")
+        return jsonify({"ok": True, "count": n})
     if ids and action in ("skip", "unskip"):
         n = 0
         with STATE["lock"]:
             for bid in ids:
                 b = STATE["books"].get(bid)
-                if not b or b.status == "copied":
+                if not b or b.status in DONE:
                     continue
                 b.status = "skipped" if action == "skip" else ""
                 refresh_status(b)
@@ -782,7 +803,7 @@ def _target_ids(data, default="all"):
     which = data.get("which", default)
     thr = settings()["threshold"]
     with STATE["lock"]:
-        items = [(i, b) for i, b in STATE["books"].items() if b.status not in ("copied", "skipped")]
+        items = [(i, b) for i, b in STATE["books"].items() if b.status not in ("copied", "moved", "skipped")]
         if which == "low":
             items = [(i, b) for i, b in items if b.confidence < thr]
         elif which == "new":
@@ -996,7 +1017,7 @@ def _resolve(g, keep_id, action):
             if bid == keep_id:
                 continue
             b = STATE["books"].get(bid)
-            if not b or b.status == "copied":
+            if not b or b.status in DONE:
                 continue
             if action == "merge" and keeper and b.kind == "ebook":
                 have = {os.path.splitext(f)[1].lower() for f in keeper.files}
@@ -1064,18 +1085,60 @@ def api_dedupe():
 # ---------------------------------------------------------------------------
 # 4b. Authors
 # ---------------------------------------------------------------------------
-def author_counts():
-    counts = {}
+def author_counts(with_trust=False):
+    counts, trust = {}, {}
     with STATE["lock"]:
         for b in STATE["books"].values():
-            if b.author and b.status != "copied":
+            if b.author and b.status not in DONE:
                 counts[b.author] = counts.get(b.author, 0) + 1
-    return counts
+                trust[b.author] = trust.get(b.author, 0) + (b.confidence or 0)
+    return (counts, trust) if with_trust else counts
+
+
+def _spelling_votes(names):
+    """How many independent sources (embedded tags, folder names, sidecars)
+    across the library spell the author each way. Only read for the few books
+    in a contested group, so it stays cheap on a 100k library."""
+    from library_db import author_key
+    keys = {author_key(n) for n in names}
+    votes = {n: 0 for n in names}
+    with STATE["lock"]:
+        books = [b for b in STATE["books"].values() if b.author in names and b.files]
+    for b in books:
+        d = os.path.dirname(b.files[0])
+        srcs = []
+        try:
+            srcs.append(core.read_sidecar_metadata(d, os.listdir(d))[0])
+            if b.kind == "audio":
+                srcs.append(core.read_audio_metadata(b.files[0], multi=len(b.files) > 1))
+            elif b.files[0].lower().endswith(".epub"):
+                srcs.append(core.read_epub_metadata(b.files[0]))
+            srcs.append(core.infer_from_path(b.src_display if b.kind == "audio" else os.path.dirname(b.src_display)))
+        except Exception:
+            pass
+        for m in srcs:
+            a = core.clean_author((m or {}).get("author", ""))
+            if a and author_key(a) in keys:
+                best = max(names, key=lambda n: enrich.ratio(n, a))
+                votes[best] += 1
+    return votes
+
+
+def author_groups():
+    counts, trust = author_counts(with_trust=True)
+    groups = authors_mod.cluster(counts, DB.rejected_pairs(), trust=trust)
+    for g in groups:
+        names = [v for v, _ in g["variants"]]
+        if g["confidence"] in ("medium", "low") and len({counts.get(n, 0) for n in names}) < len(names):
+            votes = _spelling_votes(names)            # a tie on book count: let the sources decide
+            g["canonical"] = authors_mod.pick_canonical(
+                names, counts, {n: votes.get(n, 0) * 1000 + trust.get(n, 0) for n in names})
+    return groups
 
 
 @app.get("/api/authors")
 def api_authors():
-    return jsonify({"groups": authors_mod.cluster(author_counts(), DB.rejected_pairs())})
+    return jsonify({"groups": author_groups()})
 
 
 def merge_authors(variants, canonical):
@@ -1084,7 +1147,7 @@ def merge_authors(variants, canonical):
     n = 0
     with STATE["lock"]:
         for b in STATE["books"].values():
-            if b.author in vs and b.author != canonical and b.status != "copied":
+            if b.author in vs and b.author != canonical and b.status not in DONE:
                 b.author = canonical
                 b.confidence = enrich.confidence(b)
                 n += 1
@@ -1117,7 +1180,7 @@ def api_authors_reject():
 
 @app.post("/api/authors/auto")
 def api_authors_auto():
-    groups = [g for g in authors_mod.cluster(author_counts(), DB.rejected_pairs()) if g["confidence"] == "high"]
+    groups = [g for g in author_groups() if g["confidence"] == "high"]
     total = sum(merge_authors([v for v, _ in g["variants"]], g["canonical"]) for g in groups)
     log(f"Authors: {len(groups)} safe (high-confidence) group(s) merged, {total} book(s) updated.")
     return jsonify({"ok": True, "groups": len(groups), "books": total})
@@ -1141,7 +1204,7 @@ def api_autopilot():
         do_enrich(_target_ids({}), data)
         if cancelled():
             return
-        groups = [g for g in authors_mod.cluster(author_counts(), DB.rejected_pairs()) if g["confidence"] == "high"]
+        groups = [g for g in author_groups() if g["confidence"] == "high"]
         merged = sum(merge_authors([v for v, _ in g["variants"]], g["canonical"]) for g in groups)
         log(f"Autopilot: {len(groups)} safe author merge(s), {merged} book(s) updated.")
         if data.get("use_ai", True) and ai.configured(settings()):
@@ -1156,7 +1219,7 @@ def api_autopilot():
                 "- check the Duplicates tab and the 'skipped' filter.")
         with STATE["lock"]:
             low = sum(1 for b in STATE["books"].values()
-                      if b.status not in ("copied", "skipped") and b.confidence < settings()["threshold"])
+                      if b.status not in ("copied", "moved", "skipped") and b.confidence < settings()["threshold"])
         log(f"Autopilot done. {low} book(s) still below the confidence threshold - "
             "filter 'low confidence' to review them, then Copy.")
     return run_task("autopilot", run)
@@ -1175,33 +1238,69 @@ def api_cancel():
     return jsonify({"ok": True})
 
 
+def _source_writable(path: str) -> bool:
+    """Can we delete from the source? (False for a Docker ':ro' mount.)"""
+    probe = os.path.join(path, f".organizer-write-test-{os.getpid()}")
+    try:
+        with open(probe, "w") as fh:
+            fh.write("x")
+        os.remove(probe)
+        return True
+    except OSError:
+        return False
+
+
 @app.post("/api/copy")
 def api_copy():
     data = request.get_json(force=True)
+    move = data.get("mode") == "move"
+    verb = "move" if move else "copy"
+    conflict = data.get("conflict", "skip")
+    if conflict not in ("skip", "keep_better", "replace", "keep_both"):
+        return jsonify({"error": f"Unknown conflict option {conflict}"}), 400
     dest = data.get("dest", DEFAULT_DEST)
     source = os.path.normpath(data.get("source", STATE["source"] or DEFAULT_SOURCE))
     if os.path.normpath(dest).startswith(source + os.sep) or os.path.normpath(dest) == source:
         return jsonify({"error": "Destination must not be inside the source folder."}), 400
+    if move and not _source_writable(source):
+        return jsonify({"error": "Move needs to remove books from the source, but the source is read-only. "
+                        "In Docker, remove ':ro' from the /source volume line (or pick a writable mount), "
+                        "or use Copy instead."}), 400
     try:
         os.makedirs(dest, exist_ok=True)
     except OSError as e:
         return jsonify({"error": f"Cannot create destination {dest}: {e}. Is it mounted read-write?"}), 400
     with STATE["lock"]:
-        todo = [(i, b) for i, b in STATE["books"].items() if b.status not in ("copied", "skipped")]
-    held = []
+        todo = [(i, b) for i, b in STATE["books"].items() if b.status not in ("copied", "moved", "skipped")]
+    if data.get("ids"):                                  # only the rows you checked
+        want = set(int(i) for i in data["ids"])
+        todo = [(i, b) for i, b in todo if i in want]
+    held, why = [], []
+
+    def hold(pred, reason):
+        ids = {i for i, _ in held}
+        hit = [(i, b) for i, b in todo if i not in ids and pred(b)]
+        if hit:
+            held.extend(hit)
+            why.append(f"{len(hit)} {reason}")
     if data.get("hold_damaged", True):
-        held += [(i, b) for i, b in todo if b.health]
+        hold(lambda b: b.health, "damaged")
     if data.get("hold_review", True):
-        held += [(i, b) for i, b in todo if not (b.author and b.title) and not b.health]
-    if data.get("min_conf"):
-        held += [(i, b) for i, b in todo if b.confidence < int(data["min_conf"]) and (i, b) not in held]
+        hold(lambda b: not (b.author and b.title), "missing author/title")
+    min_conf = int(data.get("min_conf") or 0)
+    if move:          # a move only takes APPROVED books: confident enough, or approved by you
+        min_conf = max(min_conf, int(settings()["threshold"]))
+        hold(lambda b: b.confidence < min_conf and not {"title", "author"} <= set(b.locked),
+             f"not approved yet (confidence below {min_conf}; approve them to include)")
+    elif min_conf:
+        hold(lambda b: b.confidence < min_conf, f"below confidence {min_conf}")
     if held:
         ids = {i for i, _ in held}
         todo = [(i, b) for i, b in todo if i not in ids]
-        log(f"Holding back {len(held)} book(s) (damaged, missing author/title, or below the minimum "
-            "confidence) - they stay in the plan for review.")
+        log(f"Holding back {len(held)} book(s): " + ", ".join(why) + " - they stay"
+            + (" in the source" if move else " in the plan") + " for review.")
     if not todo:
-        return jsonify({"error": "Nothing to copy"}), 400
+        return jsonify({"error": f"Nothing to {verb}" + (" - " + "; ".join(why) if why else "")}), 400
     layout = data.get("layout", "nested_series")
     core.NUMBER_FOLDERS = bool(data.get("number_folders", False))
     keep_all = data.get("dup_policy") == "keep_all"
@@ -1216,21 +1315,37 @@ def api_copy():
                             "uses with this structure - their files would be mixed together. Resolve the "
                             "Duplicates tab first, or pick a more specific structure."}), 507
         need = sum(os.path.getsize(f) for _, b in todo for f in b.files + b.extras if os.path.exists(f))
+        try:
+            same_drive = os.stat(source).st_dev == os.stat(dest).st_dev
+        except OSError:
+            same_drive = False
         free = shutil.disk_usage(dest).free
-        if need > free * 0.98:
+        if need > free * 0.98 and not (move and same_drive):
             gb = 1024 ** 3
-            return jsonify({"error": f"Not enough space: this copy needs about {need/gb:.1f} GB but the "
+            return jsonify({"error": f"Not enough space: this {verb} needs about {need/gb:.1f} GB but the "
                             f"destination has only {free/gb:.1f} GB free.", "code": "space"}), 507
     opts = dict(write_opf=bool(data.get("write_opf", True)), layout=layout,
                 rename_parts=bool(data.get("rename_parts", False)), write_json=bool(data.get("write_json", True)),
                 embed=bool(data.get("embed", True)), write_cover=bool(data.get("write_cover", True)),
-                embed_cover=bool(data.get("embed_cover", True)))
+                embed_cover=bool(data.get("embed_cover", True)), move=move, conflict=conflict,
+                source_root=source)
+    moving_ids = {i for i, _ in todo}
+
+    def dir_in_use(d):
+        """Does any OTHER book still waiting in the source live in folder d?"""
+        d = os.path.normpath(d)
+        with STATE["lock"]:
+            return any(i not in moving_ids and b.status not in DONE and
+                       any(os.path.normpath(os.path.dirname(f)) == d for f in b.files)
+                       for i, b in STATE["books"].items())
 
     def run():
-        done, used = 0, set()
+        done, exists, used = 0, 0, set()
+        log(f"{'Moving' if move else 'Copying'} {len(todo)} book(s) to {dest} "
+            f"(if already there: {conflict.replace('_', ' ')}) ...")
         for n, (bid, b) in enumerate(todo, 1):
             if cancelled():
-                log(f"Copy stopped by user - {done} book(s) copied; copied books are skipped next run.")
+                log(f"Stopped by user - {done} book(s) {verb}d; finished books are skipped next run.")
                 break
             progress(n, len(todo))
             override = None
@@ -1242,19 +1357,31 @@ def api_copy():
                 used.add(cand.lower())
                 override = cand if cand != base else None
             try:
-                folder = core.copy_book(b, dest, log, folder_override=override,
+                moving_ids.add(bid)
+                folder = core.copy_book(b, dest, log, folder_override=override, dir_in_use=dir_in_use,
                                         journal=lambda a, s, d: DB.journal(a, s, d, b.title), **opts)
-                b.status = "copied"
+                b.status = "moved" if move else "copied"
+                b.flags = [f for f in b.flags if "already in destination" not in f]
                 done += 1
-                log(f"Copied: {os.path.relpath(folder, dest)}")
+                log(f"{'Moved' if move else 'Copied'}: {os.path.relpath(folder, dest)}")
+            except core.BookExists as e:
+                exists += 1
+                b.status = "in destination"
+                if "already in destination" not in " ".join(b.flags):
+                    b.flags = b.flags + [f"already in destination: {e}"]
+                DB.journal("exists", b.src_display, "", str(e))
+                log(f"  left in place - {b.author} / {b.title}: {e}")
             except Exception as e:
                 b.status = f"ERROR: {e}"
                 DB.journal("error", b.src_display, "", str(e))
-                log(f"ERROR copying '{b.title}': {e}")
+                log(f"ERROR {'moving' if move else 'copying'} '{b.title}': {e}")
             touch()
-        log(f"Finished: {done}/{len(todo)} book(s) copied to {dest}. "
-            "Point Audiobookshelf or Calibre (Add books > from folders, one book per folder) at it.")
-    return run_task("copy", run)
+        log(f"Finished: {done}/{len(todo)} book(s) {verb}d to {dest}"
+            + (f"; {exists} already there and left in place (filter 'already in destination')" if exists else "")
+            + ". Point Audiobookshelf or Calibre (Add books > from folders, one book per folder) at it.")
+        if move and done:
+            log("The source now holds only what still needs work - rescan it any time.")
+    return run_task(verb, run)
 
 
 load_plan()

@@ -4,6 +4,51 @@ All notable changes to Library Organizer, newest first. Both editions
 (Windows and Docker/NAS) ship the same `core.py` / `app.py` / templates,
 so every entry applies to both unless noted.
 
+## v2.1.0 — Move approved books, "already in destination" options
+
+- **Move mode.** Next to **5 Copy**, choose *move approved books*. Only
+  approved books leave the source: confidence at or above your threshold,
+  or ticked with the new **✓ Approve** button (per row, or *Approve* for
+  all checked rows). Everything else stays behind, so the source becomes a
+  to-do list of what still needs work.
+  - Same drive: an instant rename (no copying, no extra space).
+    Different drive: copy, verify, and only then delete the original.
+  - All-or-nothing per book: if anything fails partway, every file already
+    moved for that book is put back.
+  - Leftover images / `.nfo` / `.txt` / old metadata in a folder no other
+    book uses follow the book (as `original-…` on a clash); emptied source
+    folders are removed. Only OS junk (`Thumbs.db`, `desktop.ini`,
+    `.DS_Store`, NAS thumbnail folders) is ever deleted.
+  - A read-only source (Docker `:ro`) is refused with a clear message.
+  - Every move is in the journal (**Journal CSV**).
+- **If a book is already in the destination** (Copy and Move):
+  *skip it* (default; left where it is, filter *already in destination*),
+  *keep the better copy*, *replace it* (old files set aside in
+  `.replaced/<date>/`, never deleted), or *keep both* (numbered folder).
+  Identical files are never a conflict: a move just removes the source copy.
+- **Only the checked rows** option for Copy/Move.
+- New filters: *approved (will be moved)*, *already in destination*.
+- New test suite `tests/test_move.py` (rollback, cross-drive, read-only
+  source, every conflict option), run in CI.
+
+## v2.0.2 — loose-file fix, screenshots
+
+- **Fixed: two different books loose in one folder could be merged into one.**
+  In `Audiobooks/Andy Weir - Project Hail Mary (Unabridged) 32k.mp3` the
+  bitrate `32k` was read as a part number, and every un-numbered file in the
+  folder (here `Dennis E Taylor - For We Are Many.m4b`) was then attached to
+  it, so one book's audio would have been copied into another's folder.
+  Bitrate/size/codec tags are no longer part numbers, and a loose file that
+  is a whole-book format or names its own author and title stays its own
+  book. Bonus tracks, intros and real parts still group as before.
+  Regression cases added to `tests/test_realworld_names.py`.
+- The progress bar now clears when a task finishes (it stayed full).
+- The book panel shows the online match as a percentage (it could read "1.05").
+- Authors tab: when two spellings have the same number of books, the one
+  most of the files' own tags and folders use is suggested (a single
+  "Pierce Browne" folder no longer out-votes "Pierce Brown").
+- README: screenshots of every tab.
+
 ## v2.0.1 — folder picker fixes (Windows)
 
 - **Browse... listed no drives on some PCs.** The picker checked every drive

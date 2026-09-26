@@ -162,6 +162,19 @@ curl -I http://NAS-IP:8765           # through Docker's port mapping
 4. **NAS firewall.** On Asustor: Settings → ADM Defender → Firewall — add
    an allow rule for TCP 8765.
 
+## Using Move
+
+**Move approved books** removes finished books from the source, so the
+source must be mounted **read-write**. Remove `:ro` from the `/source` line:
+
+```yaml
+      - /share/Volume10/Audiobooks-messy:/source        # no :ro - Move needs to delete from here
+```
+
+Keep `:ro` if you only ever Copy; the app refuses a Move from a read-only
+source rather than half-doing it. Moves within the same NAS volume are
+instant renames; between volumes each file is copied, verified, then deleted.
+
 ## Optional: AI and listening to intros
 
 **AI** is set up in the web UI (**AI & Settings** tab), not in the compose
